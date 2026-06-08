@@ -7566,24 +7566,26 @@ async function _uploadFileChunks(sheetId, file){
   setP(35,'Envoi vers Google Drive…');
   let uploadOk = false;
   try{
+    const postBody = JSON.stringify({
+      action: 'uploadDocumentFull',
+      payload: {
+        id:       sheetId,       // ← id explicite
+        fileName: file.name,
+        fileType: file.type || 'application/octet-stream',
+        fileData: data
+      },
+      _token: GAS_SECRET
+    });
+    console.log('[Doc] POST uploadDocumentFull id='+sheetId+' taille='+postBody.length+'chars');
     const resp = await fetch(GAS_URL, {
       method: 'POST',
       mode: 'no-cors',
       headers: {'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({
-        action: 'uploadDocumentFull',
-        payload: {
-          id:       sheetId,
-          fileName: file.name,
-          fileType: file.type || 'application/octet-stream',
-          fileData: data   // base64 complet
-        },
-        _token: GAS_SECRET
-      }),
+      body: postBody,
       redirect: 'follow'
     });
     uploadOk = true;
-    console.log('[Doc] POST envoyé (no-cors, réponse non lisible)');
+    console.log('[Doc] POST envoyé (no-cors)');
   }catch(e){
     console.error('[Doc] Erreur POST:', e);
   }
