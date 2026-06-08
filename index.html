@@ -2275,7 +2275,18 @@ html, body {
                     <option value="mois_suivant">Mois suivant l'adhésion = 1er mois de cotisation</option>
                   </select>
                   <div style="font-size:11px;color:var(--gray-400);margin-top:4px">Cette règle s'applique uniquement l'année d'adhésion. Elle peut être surchargée individuellement par membre.</div>
-                  <span style="font-size:11px;color:var(--gray-500);margin-top:3px;display:block">Montant reporté des exercices antérieurs — inclus dans le solde trésorerie.</span>
+                </div>
+                <div class="field field-full">
+                  <label>📱 Indicatif téléphonique par défaut</label>
+                  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                    <select id="brand-tel-indicatif" style="flex:1;min-width:200px" onchange="onBrandIndicatifChange()">
+                    </select>
+                    <div style="display:flex;align-items:center;gap:6px;padding:8px 12px;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;font-size:13px">
+                      <span id="brand-tel-flag-preview" style="font-size:18px">🇨🇮</span>
+                      <span id="brand-tel-code-preview" style="font-weight:700;color:#5B21B6;font-family:var(--mono)">+225</span>
+                    </div>
+                  </div>
+                  <div style="font-size:11px;color:var(--gray-400);margin-top:4px">Indicatif affiché par défaut lors de l'enregistrement d'un nouveau membre.</div>
                 </div>
 
                 <!-- HSMS API Config — réservé Super Admin (user: admin) uniquement -->
@@ -3304,7 +3315,6 @@ html, body {
       <div class="field">
         <label>Date d'adhésion</label>
         <input type="date" id="m-date" value="2026-01-01" onchange="updateReglePreview()"/>
-      </div>
       </div>
       <div class="field">
         <label>🗓️ Démarrage des cotisations</label>
@@ -5814,7 +5824,7 @@ function openAddMember(){
   document.getElementById('modal-err').style.display='none';
   generateCode();
   _initDroitAdhesionField(false);
-  selectTelCountry('+225','🇨🇮');
+  applyDefaultTelIndicatif();
   document.getElementById('m-tel').value='';
   updateComptesSelects();
   const mCompte = document.getElementById('m-compte');
@@ -8340,13 +8350,55 @@ let _telSelectedCode = '+225';
 let _telDropdownOpen = false;
 
 function initTelDropdown(){
-  renderTelCountries(TEL_COUNTRIES);
+  // Peupler le select de Personnalisation avec tous les pays
+  const brandSel = document.getElementById('brand-tel-indicatif');
+  if(brandSel && brandSel.options.length <= 1){
+    TEL_COUNTRIES.forEach(c=>{
+      const opt = document.createElement('option');
+      opt.value = c.code+'|'+c.flag;
+      opt.textContent = c.flag+' '+c.name+' ('+c.code+')';
+      brandSel.appendChild(opt);
+    });
+    const optCustom = document.createElement('option');
+    optCustom.value = 'custom';
+    optCustom.textContent = '✏️ Autre — saisir manuellement';
+    brandSel.appendChild(optCustom);
+  }
+  renderTelCountries(TEL_COUNTRIES, '');
   // Fermer si clic ailleurs
   document.addEventListener('click', function(e){
     if(!e.target.closest('#tel-flag-btn') && !e.target.closest('#tel-dropdown')){
       closeTelDropdown();
     }
   });
+}
+
+function onBrandIndicatifChange(){
+  const sel = document.getElementById('brand-tel-indicatif');
+  if(!sel) return;
+  const val = sel.value;
+  if(val === 'custom'){
+    const custom = prompt('Saisissez l\'indicatif (ex: +33, +49) :');
+    if(custom){
+      const code = custom.startsWith('+')?custom:('+'+custom.replace(/\D/g,''));
+      document.getElementById('brand-tel-flag-preview').textContent='🌍';
+      document.getElementById('brand-tel-code-preview').textContent=code;
+      // Stocker dans un champ caché
+      branding.telIndicatifDefaut = code+'|🌍';
+    }
+    return;
+  }
+  if(!val) return;
+  const [code, flag] = val.split('|');
+  document.getElementById('brand-tel-flag-preview').textContent=flag||'🌍';
+  document.getElementById('brand-tel-code-preview').textContent=code||'+225';
+}
+
+function applyDefaultTelIndicatif(){
+  // Appliquer l'indicatif par défaut défini dans Personnalisation
+  const raw = branding.telIndicatifDefaut || '+225|🇨🇮';
+  const [code, flag] = raw.split('|');
+  selectTelCountry(code||'+225', flag||'🇨🇮');
 }
 
 function renderTelCountries(list, q){
@@ -13574,6 +13626,10 @@ function initBrandingPage(){
     document.getElementById('brand-solde-precedent').value = branding.soldePrecedent||0;
   if(document.getElementById('brand-regle-cotisation'))
     document.getElementById('brand-regle-cotisation').value = branding.regleCotisation||'mois_adhesion';
+  if(document.getElementById('brand-tel-indicatif') && branding.telIndicatifDefaut){
+    document.getElementById('brand-tel-indicatif').value = branding.telIndicatifDefaut;
+    onBrandIndicatifChange();
+  }
   if(document.getElementById('brand-hsms-worker'))   document.getElementById('brand-hsms-worker').value   = branding.hsmsWorkerUrl||'';
   if(document.getElementById('brand-hsms-token'))    document.getElementById('brand-hsms-token').value    = branding.hsmsToken||'';
   if(document.getElementById('brand-hsms-email'))    document.getElementById('brand-hsms-email').value    = branding.hsmsEmail||'';
@@ -13754,6 +13810,10 @@ function saveBranding(){
   branding.hsmsClientSecret = document.getElementById('brand-hsms-secret')?.value.trim()||'';
   branding.debutMois= parseInt(document.getElementById('brand-mois-debut')?.value||'2');
   branding.regleCotisation = document.getElementById('brand-regle-cotisation')?.value || 'mois_adhesion';
+  const brandTelSel = document.getElementById('brand-tel-indicatif');
+  if(brandTelSel && brandTelSel.value && brandTelSel.value !== 'custom'){
+    branding.telIndicatifDefaut = brandTelSel.value; // format "code|flag"
+  }
   const newUrl = document.getElementById('brand-url').value.trim();
   if(newUrl) branding.url = newUrl;
 
