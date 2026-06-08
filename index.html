@@ -1150,15 +1150,35 @@ html, body {
               </div>
               <input type="hidden" id="pay-code"/>
               <!-- Membre sélectionné -->
-              <div id="pay-selected-bar" style="display:none;margin-top:8px;padding:10px 14px;background:#EFF6FF;border:1px solid #93C5FD;border-radius:8px;display:flex;align-items:center;gap:12px">
-                <div>
-                  <div style="font-size:13px;font-weight:700;color:var(--navy)" id="pay-selected-nom">—</div>
-                  <div style="font-size:11px;color:var(--gray-500);margin-top:1px">
-                    Code : <span id="pay-selected-code" style="font-family:var(--mono);font-weight:600">—</span>
-                    · Quota : <span id="pay-selected-quota">—</span> FCFA/mois
+              <div id="pay-selected-bar" style="display:none;margin-top:8px;padding:10px 14px;background:#EFF6FF;border:1px solid #93C5FD;border-radius:8px">
+                <div style="display:flex;align-items:center;gap:12px">
+                  <div style="flex:1">
+                    <div style="font-size:13px;font-weight:700;color:var(--navy)" id="pay-selected-nom">—</div>
+                    <div style="font-size:11px;color:var(--gray-500);margin-top:1px">
+                      Code : <span id="pay-selected-code" style="font-family:var(--mono);font-weight:600">—</span>
+                    </div>
                   </div>
+                  <button onclick="clearPayMembre()" style="background:none;border:none;cursor:pointer;color:#9CA3AF;font-size:18px;line-height:1">✕</button>
                 </div>
-                <button onclick="clearPayMembre()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#9CA3AF;font-size:18px;line-height:1">✕</button>
+                <!-- Quota éditable -->
+                <div style="margin-top:10px;padding-top:10px;border-top:1px solid #BFDBFE">
+                  <div style="font-size:12px;color:#1D4ED8;font-weight:600;margin-bottom:6px">📋 Quota mensuel de ce membre</div>
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <div style="display:flex;align-items:center;gap:6px;flex:1">
+                      <input type="number" id="pay-quota-edit"
+                        placeholder="Quota FCFA" min="100" step="100"
+                        oninput="onPayQuotaChange()"
+                        style="width:130px;padding:6px 10px;border:1.5px solid #93C5FD;border-radius:6px;font-size:13px;font-weight:600;color:var(--navy)"/>
+                      <span style="font-size:12px;color:#6B7280">FCFA / mois</span>
+                    </div>
+                    <button onclick="savePayQuota()"
+                      id="pay-quota-save-btn"
+                      style="display:none;padding:6px 12px;background:#1D4ED8;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
+                      💾 Mettre à jour le quota
+                    </button>
+                  </div>
+                  <div id="pay-quota-status" style="font-size:11px;margin-top:5px;color:#6B7280"></div>
+                </div>
               </div>
             </div>
             <div class="field">
@@ -4439,9 +4459,34 @@ function getMoisPaidList(m, annee){
 }
 
 function getSolde(m, annee){
-  const yr = String(annee || _anneeActive);
-  const nbDus = getNbMoisDus(m, yr);
-  return (m.quota * nbDus) - getTotalPaid(m, yr);
+  // Calcul correct : total dû (quota × mois dus) - total payé
+  // Si le membre a un historique de changement de quota (quotaHistory),
+  // on calcule le dû par période avec le bon quota
+  const yr      = String(annee || _anneeActive);
+  const nbDus   = getNbMoisDus(m, yr);
+  const paid    = getTotalPaid(m, yr);
+
+  // Calculer le total dû selon l'historique de quota si disponible
+  let totalDu = 0;
+  if(m.quotaHistory && Array.isArray(m.quotaHistory) && m.quotaHistory.length > 0){
+    // Reconstruire mois par mois avec le bon quota
+    const moisList = getMonthsForYear(yr);
+    const MOIS_IDX = {Janvier:1,Février:2,Mars:3,Avril:4,Mai:5,Juin:6,Juillet:7,Août:8,Septembre:9,Octobre:10,Novembre:11,Décembre:12};
+    const moisDus  = getMoisDusJusquAuMoisActuel(m, yr).map(mo=>MOIS_IDX[mo]||0);
+    moisDus.forEach(moisNum=>{
+      const dateRef = yr+'-'+String(moisNum).padStart(2,'0')+'-01';
+      // Trouver le quota en vigueur ce mois-là
+      let quotaMois = m.quotaHistory[0]?.quota || m.quota;
+      for(const h of m.quotaHistory){
+        if(h.date <= dateRef) quotaMois = h.quota;
+      }
+      totalDu += quotaMois;
+    });
+  } else {
+    totalDu = m.quota * nbDus;
+  }
+
+  return totalDu - paid;
 }
 
 // Affichage compact d'un montant — exact si < 1000, sinon en K
@@ -6275,18 +6320,85 @@ function selectPayMembre(code){
   document.getElementById('pay-members-dropdown').style.display='none';
   // Afficher barre sélection
   const bar = document.getElementById('pay-selected-bar');
-  if(bar) bar.style.display='flex';
+  if(bar) bar.style.display='block';
   const nomEl   = document.getElementById('pay-selected-nom');
   const codeEl  = document.getElementById('pay-selected-code');
-  const quotaEl = document.getElementById('pay-selected-quota');
-  if(nomEl)   nomEl.textContent   = m.nom;
-  if(codeEl)  codeEl.textContent  = m.code;
-  if(quotaEl) quotaEl.textContent = (m.quota||0).toLocaleString('fr-FR');
+  if(nomEl)  nomEl.textContent  = (m.prenom?m.prenom+' ':'')+m.nom;
+  if(codeEl) codeEl.textContent = m.code;
+  // Charger le quota éditable
+  const quotaInput = document.getElementById('pay-quota-edit');
+  const quotaBtn   = document.getElementById('pay-quota-save-btn');
+  const quotaStatus= document.getElementById('pay-quota-status');
+  if(quotaInput){ quotaInput.value = m.quota||1000; }
+  if(quotaBtn)  { quotaBtn.style.display='none'; }
+  if(quotaStatus){ quotaStatus.textContent='Quota actuel : '+(m.quota||0).toLocaleString('fr-FR')+' FCFA/mois'; quotaStatus.style.color='#6B7280'; }
   // Pré-remplir montant avec quota
   const amtEl = document.getElementById('pay-amount');
   if(amtEl && m.quota) amtEl.value = m.quota;
   updatePayMonthGrid();
   checkPayAmount();
+}
+
+function onPayQuotaChange(){
+  const code = document.getElementById('pay-code')?.value;
+  const m = members.find(x=>x.code===code);
+  if(!m) return;
+  const newQuota = parseInt(document.getElementById('pay-quota-edit')?.value||'0');
+  const btn = document.getElementById('pay-quota-save-btn');
+  const status = document.getElementById('pay-quota-status');
+  if(newQuota > 0 && newQuota !== m.quota){
+    if(btn) btn.style.display='block';
+    if(status){ status.textContent='⚠️ Quota modifié — cliquez "Mettre à jour" pour sauvegarder'; status.style.color='#D97706'; }
+  } else {
+    if(btn) btn.style.display='none';
+    if(status){ status.textContent='Quota actuel : '+(m.quota||0).toLocaleString('fr-FR')+' FCFA/mois'; status.style.color='#6B7280'; }
+  }
+  // Mettre à jour le montant suggéré si un seul mois est sélectionné
+  const checked = document.querySelectorAll('.pay-month-btn.selected');
+  if(checked.length <= 1 && newQuota > 0){
+    const amtEl = document.getElementById('pay-amount');
+    if(amtEl) amtEl.value = newQuota * (checked.length||1);
+  }
+}
+
+function savePayQuota(){
+  const code = document.getElementById('pay-code')?.value;
+  const idx  = members.findIndex(x=>x.code===code);
+  if(idx<0){ _showDocToast('⚠️ Membre non trouvé'); return; }
+  const newQuota = parseInt(document.getElementById('pay-quota-edit')?.value||'0');
+  if(!newQuota || newQuota < 100){ _showDocToast('⚠️ Quota invalide (minimum 100 FCFA)'); return; }
+  const oldQuota = members[idx].quota;
+  const today = new Date().toISOString().split('T')[0];
+
+  // Conserver l'historique des changements de quota
+  if(!members[idx].quotaHistory) members[idx].quotaHistory = [];
+  // Ajouter le quota actuel dans l'historique s'il n'y est pas déjà
+  if(members[idx].quotaHistory.length === 0){
+    members[idx].quotaHistory.push({quota: oldQuota, date: members[idx].date||today});
+  }
+  // Ajouter le nouveau quota avec la date d'aujourd'hui
+  members[idx].quotaHistory.push({quota: newQuota, date: today});
+  members[idx].quota = newQuota;
+
+  dbPost('updateMember', members[idx]);
+
+  // Mettre à jour le montant affiché
+  const amtEl = document.getElementById('pay-amount');
+  const checked = document.querySelectorAll('.pay-month-btn.selected');
+  if(amtEl) amtEl.value = newQuota * Math.max(1, checked.length);
+
+  // Feedback
+  const btn = document.getElementById('pay-quota-save-btn');
+  const status = document.getElementById('pay-quota-status');
+  if(btn) btn.style.display='none';
+  if(status){
+    status.textContent='✅ Quota mis à jour : '+newQuota.toLocaleString('fr-FR')+' FCFA/mois (était : '+oldQuota.toLocaleString('fr-FR')+' FCFA depuis '+today+')';
+    status.style.color='#16A34A';
+  }
+  _showDocToast('✅ Quota de '+((members[idx].prenom?members[idx].prenom+' ':'')+members[idx].nom)+' mis à jour : '+newQuota.toLocaleString('fr-FR')+' FCFA/mois');
+  checkPayAmount();
+  invalidateCotisCache();
+  invalidateStatusCache();
 }
 
 function clearPayMembre(){
