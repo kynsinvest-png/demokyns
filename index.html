@@ -8355,8 +8355,10 @@ const TEL_COUNTRIES = [
 
 let _telSelectedCode = '+225';
 let _telDropdownOpen = false;
-// Initialiser le bouton indicatif dès le chargement (avant initTelDropdown)
+const _TEL_DEFAULT = '+225|🇨🇮'; // Valeur par défaut Côte d'Ivoire
+
 document.addEventListener('DOMContentLoaded', function(){
+  // Afficher CI par défaut immédiatement dans le bouton du modal membre
   const flagEl = document.getElementById('tel-flag-display');
   const codeEl = document.getElementById('tel-code-display');
   if(flagEl) flagEl.textContent = '🇨🇮';
@@ -8365,8 +8367,8 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 function initTelDropdown(){
-  // Peupler le select de Personnalisation
   const brandSel = document.getElementById('brand-tel-indicatif');
+  // Peupler le select Personnalisation si vide
   if(brandSel && brandSel.options.length <= 1){
     TEL_COUNTRIES.forEach(c=>{
       const opt = document.createElement('option');
@@ -8376,19 +8378,15 @@ function initTelDropdown(){
     });
     const optCustom = document.createElement('option');
     optCustom.value = 'custom';
-    optCustom.textContent = '\u270F\uFE0F Autre \u2014 saisir manuellement';
+    optCustom.textContent = '✏️ Autre — saisir manuellement';
     brandSel.appendChild(optCustom);
   }
   renderTelCountries(TEL_COUNTRIES, '');
-  // Appliquer la valeur sauvegardée dans le select Personnalisation
-  const savedRaw = branding.telIndicatifDefaut || lsGet('_tel_indicatif_defaut') || '+225|\uD83C\uDDEB\uD83C\uDDF7';
-  if(brandSel && savedRaw){
-    brandSel.value = savedRaw;
-    onBrandIndicatifChange();
-  }
-  // Appliquer au modal membre
+  // Restaurer la valeur sauvegardée (branding > localStorage > CI par défaut)
+  const savedRaw = branding.telIndicatifDefaut || lsGet('_tel_indicatif_defaut') || _TEL_DEFAULT;
+  _applyTelBrandSel(savedRaw);
   applyDefaultTelIndicatif();
-  // Fermer si clic ailleurs
+  // Fermer dropdown si clic ailleurs
   document.addEventListener('click', function(e){
     if(!e.target.closest('#tel-flag-btn') && !e.target.closest('#tel-dropdown')){
       closeTelDropdown();
@@ -8396,48 +8394,72 @@ function initTelDropdown(){
   });
 }
 
+// Applique une valeur "code|flag" dans le select Personnalisation + aperçu
+function _applyTelBrandSel(raw){
+  const brandSel = document.getElementById('brand-tel-indicatif');
+  if(!brandSel || !raw) return;
+  // Chercher l'option correspondante
+  let found = false;
+  for(const opt of brandSel.options){
+    if(opt.value === raw){ brandSel.value = raw; found = true; break; }
+  }
+  if(!found){
+    // Valeur personnalisée non dans la liste → sélectionner CI par défaut
+    brandSel.value = _TEL_DEFAULT;
+  }
+  // Mettre à jour l'aperçu
+  const parts = (brandSel.value||_TEL_DEFAULT).split('|');
+  const fp = document.getElementById('brand-tel-flag-preview');
+  const cp = document.getElementById('brand-tel-code-preview');
+  if(fp) fp.textContent = parts[1]||'🇨🇮';
+  if(cp) cp.textContent = parts[0]||'+225';
+}
+
 function onBrandIndicatifChange(){
   const sel = document.getElementById('brand-tel-indicatif');
   if(!sel) return;
   const val = sel.value;
   if(val === 'custom'){
-    const custom = prompt('Saisissez l\'indicatif (ex: +33, +49) :');
+    const custom = prompt("Saisissez l'indicatif (ex: +33, +49) :");
     if(custom){
       const code = custom.startsWith('+')?custom:('+'+custom.replace(/\D/g,''));
-      const raw = code+'|\uD83C\uDF0D';
-      document.getElementById('brand-tel-flag-preview').textContent='\uD83C\uDF0D';
-      document.getElementById('brand-tel-code-preview').textContent=code;
+      const raw  = code+'|🌍';
       branding.telIndicatifDefaut = raw;
       lsSet('_tel_indicatif_defaut', raw);
+      const fp = document.getElementById('brand-tel-flag-preview');
+      const cp = document.getElementById('brand-tel-code-preview');
+      if(fp) fp.textContent='🌍';
+      if(cp) cp.textContent=code;
     }
     return;
   }
-  if(!val) return;
-  const parts = val.split('|');
-  const code = parts[0]||'+225';
-  const flag = parts[1]||'\uD83C\uDF0D';
+  if(!val || val===_TEL_DEFAULT){
+    branding.telIndicatifDefaut = _TEL_DEFAULT;
+    lsSet('_tel_indicatif_defaut', _TEL_DEFAULT);
+  } else {
+    branding.telIndicatifDefaut = val;
+    lsSet('_tel_indicatif_defaut', val);
+  }
+  const parts = (val||_TEL_DEFAULT).split('|');
   const fp = document.getElementById('brand-tel-flag-preview');
   const cp = document.getElementById('brand-tel-code-preview');
-  if(fp) fp.textContent=flag;
-  if(cp) cp.textContent=code;
-  // Sauvegarder dans branding ET localStorage pour survie à la reconnexion
-  branding.telIndicatifDefaut = val;
-  lsSet('_tel_indicatif_defaut', val);
+  if(fp) fp.textContent = parts[1]||'🇨🇮';
+  if(cp) cp.textContent = parts[0]||'+225';
 }
 
 function applyDefaultTelIndicatif(){
-  // Lire depuis branding en priorité, sinon localStorage, sinon CI +225
-  const raw   = branding.telIndicatifDefaut || lsGet('_tel_indicatif_defaut') || '+225|\uD83C\uDDEB\uD83C\uDDF7';
+  // Lire branding > localStorage > CI défaut — mettre à jour bouton modal membre
+  const raw   = branding.telIndicatifDefaut || lsGet('_tel_indicatif_defaut') || _TEL_DEFAULT;
   const parts = raw.split('|');
-  const code  = parts[0] || '+225';
-  const flag  = parts[1] || '\uD83C\uDDEB\uD83C\uDDF7';
-  // Mettre à jour la variable globale ET le bouton affiché
+  const code  = parts[0]||'+225';
+  const flag  = parts[1]||'🇨🇮';
   _telSelectedCode = code;
   const flagEl = document.getElementById('tel-flag-display');
   const codeEl = document.getElementById('tel-code-display');
   if(flagEl) flagEl.textContent = flag;
   if(codeEl) codeEl.textContent = code;
 }
+
 
 
 function renderTelCountries(list, q){
