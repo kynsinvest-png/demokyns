@@ -7100,6 +7100,7 @@ function confirmExcPay(){
   const code=document.getElementById('exc-pay-member-code').value;
   const amount=parseInt(document.getElementById('exc-pay-amount').value)||0;
   if(amount<100) return;
+  if(!validateCompte('exc-pay-compte','destinataire ')) return;
   if(!excCotisations[excIdx].paiements) excCotisations[excIdx].paiements={};
   excCotisations[excIdx].paiements[code]=amount;
   document.getElementById('exc-pay-ok').style.display='flex';
@@ -7185,6 +7186,7 @@ function confirmExcPay(){
   const amount = parseInt(document.getElementById('exc-pay-amount').value)||0;
   const mode   = document.getElementById('exc-pay-mode')?.value||'';
   if(amount<100) return;
+  if(!validateCompte('exc-pay-compte','destinataire ')) return;
   if(!excCotisations[excIdx].paiements) excCotisations[excIdx].paiements={};
   excCotisations[excIdx].paiements[code] = amount;
   const excPayRecord = {excId:excCotisations[excIdx].id, memberCode:code, montant:amount, mode, date:new Date().toISOString().split('T')[0]};
@@ -7379,6 +7381,7 @@ function saveAssist(){
   _cacheData();
 
   // ── Liaison Comptes & Trésorerie ──
+  if(!validateCompte('assist-compte','source ')) return;
   const astCpt = document.getElementById('assist-compte')?.value;
   if(astCpt && idx===-1){
     const mb = getMemberByCode(memberCode);
@@ -9163,6 +9166,7 @@ function savePret(){
   errEl.style.display='none';
   if(!memberCode){showErr('Sélectionnez un membre bénéficiaire.');return;}
   if(!montant||montant<=0){showErr('Le montant doit être supérieur à 0.');return;}
+  if(!validateCompte('pay-compte','destinataire ')) return;
   if(taux<0||taux>100){showErr('Le taux doit être compris entre 0% et 100%.');return;}
   if(!duree||duree<1){showErr('La durée doit être d\'au moins 1 échéance.');return;}
   if(!date){showErr('La date de déblocage est obligatoire.');return;}
@@ -9182,6 +9186,7 @@ function savePret(){
   if(idx>=0) prets[idx]=record; else prets.push(record);
   dbPost('savePret',record);
   // Transaction compte — sortie si nouveau prêt (pas modification)
+  if(!validateCompte('pret-compte','source (à débiter) ')) return;
   const pretCpt = document.getElementById('pret-compte')?.value;
   if(pretCpt && !_pretEditId){
     enregistrerTransaction({compteId:pretCpt, type:'sortie', montant:record.montant,
@@ -9245,6 +9250,7 @@ function saveRemboursement(){
   errEl.style.display='none';
   if(!montant||montant<=0){errEl.textContent='Montant invalide.';errEl.style.display='block';return;}
   if(!date){errEl.textContent='Date obligatoire.';errEl.style.display='block';return;}
+  if(!validateCompte('rembours-compte','destinataire ')) return;
   const pret=prets.find(x=>x.id===pretId);if(!pret)return;
   const rows=getAmortissement(pret);
   const row=rows.find(r=>r.n===numEch);
@@ -10902,6 +10908,26 @@ function renderComptes(){
 }
 
 // ── Mettre à jour les selects dans les autres modals ──
+// ── Validation compte obligatoire ─────────────────────────────
+// Retourne true si valide, false + affiche erreur si vide
+function validateCompte(selectId, labelModule){
+  const sel = document.getElementById(selectId);
+  if(!sel) return true; // champ absent → pas de validation
+  if(!sel.value || sel.value === ''){
+    sel.style.borderColor = '#DC2626';
+    sel.style.boxShadow   = '0 0 0 2px rgba(220,38,38,0.2)';
+    // Toast d'erreur
+    _showDocToast('⚠️ Compte '+(labelModule||'')+'obligatoire — sélectionnez un compte avant d\'enregistrer');
+    // Remettre la bordure normale après 3s
+    setTimeout(()=>{ sel.style.borderColor=''; sel.style.boxShadow=''; }, 3000);
+    sel.focus();
+    return false;
+  }
+  sel.style.borderColor = '';
+  sel.style.boxShadow   = '';
+  return true;
+}
+
 function updateComptesSelects(){
   const selects = document.querySelectorAll('.select-compte');
   const opts = '<option value="">— Sélectionner un compte —</option>'
@@ -12791,6 +12817,7 @@ function saveDep(){
   _cacheData();
 
   // ── Liaison Comptes & Trésorerie ──
+  if(!validateCompte('dep-compte','source ')) return;
   const depCpt = document.getElementById('dep-compte')?.value;
   if(depCpt && idx===-1){
     enregistrerTransaction({
@@ -14268,6 +14295,7 @@ function saveDon(){
   _cacheData();
 
   // ── Liaison Comptes & Trésorerie ──
+  if(!validateCompte('don-compte','destinataire ')) return;
   const donCpt = document.getElementById('don-compte')?.value;
   if(donCpt && idx===-1 && type==='especes' && montant>0){
     enregistrerTransaction({
