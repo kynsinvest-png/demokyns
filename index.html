@@ -3186,8 +3186,29 @@ html, body {
       </div>
       <div class="field">
         <label>Numéro de téléphone</label>
-        <input type="tel" id="m-tel" placeholder="Ex: 0712345678" oninput="formatTelInput(this)" onblur="formatTelInput(this)"/>
-        <span style="font-size:11px;color:var(--gray-400);margin-top:2px">Le préfixe +225 sera ajouté automatiquement</span>
+        <div style="display:flex;gap:6px;align-items:stretch">
+          <!-- Sélecteur indicatif pays -->
+          <div style="position:relative;flex-shrink:0">
+            <div id="tel-flag-btn" onclick="toggleTelDropdown()" style="display:flex;align-items:center;gap:5px;padding:0 10px;height:100%;min-height:40px;border:1.5px solid var(--gray-300);border-radius:var(--radius);cursor:pointer;background:#fff;font-size:13px;white-space:nowrap;user-select:none">
+              <span id="tel-flag-display">🇨🇮</span>
+              <span id="tel-code-display" style="font-weight:600;color:var(--navy)">+225</span>
+              <span style="font-size:10px;color:var(--gray-400)">▼</span>
+            </div>
+            <div id="tel-dropdown" style="display:none;position:absolute;top:100%;left:0;width:280px;background:#fff;border:1.5px solid var(--gray-300);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:500;max-height:300px;overflow:hidden">
+              <div style="padding:8px">
+                <input type="text" id="tel-country-search" placeholder="🔍 Rechercher un pays…"
+                  oninput="filterTelCountries()"
+                  style="width:100%;padding:7px 10px;border:1.5px solid var(--gray-300);border-radius:6px;font-size:12px"/>
+              </div>
+              <div id="tel-country-list" style="max-height:230px;overflow-y:auto"></div>
+            </div>
+          </div>
+          <!-- Champ numéro -->
+          <input type="tel" id="m-tel" placeholder="0712345678"
+            oninput="onTelInput()"
+            style="flex:1"/>
+        </div>
+        <span id="tel-preview" style="font-size:11px;color:var(--blue);margin-top:3px;display:block"></span>
       </div>
       <div class="field">
         <label>Email</label>
@@ -3245,8 +3266,25 @@ html, body {
         <input type="number" id="m-verse" value="1000" min="1000" step="1000"/>
       </div>
       <div class="field">
+        <label>Compte à créditer <span style="color:#DC2626">*</span></label>
+        <select id="m-compte" class="select-compte" required style="border-color:var(--gray-300)">
+          <option value="">— Sélectionner un compte —</option>
+        </select>
+        <div id="m-compte-err" style="display:none;font-size:11px;color:#DC2626;margin-top:3px">⚠️ Veuillez sélectionner un compte à créditer</div>
+      </div>
+      <div class="field">
+        <label>Mode de paiement</label>
+        <select id="m-mode-paiement">
+          <option value="especes">Espèces</option>
+          <option value="mobile_money">Mobile Money</option>
+          <option value="virement">Virement bancaire</option>
+          <option value="cheque">Chèque</option>
+        </select>
+      </div>
+      <div class="field">
         <label>Date d'adhésion</label>
         <input type="date" id="m-date" value="2026-01-01" onchange="updateReglePreview()"/>
+      </div>
       </div>
       <div class="field">
         <label>🗓️ Démarrage des cotisations</label>
@@ -5731,6 +5769,13 @@ function openAddMember(){
   document.getElementById('modal-err').style.display='none';
   generateCode();
   _initDroitAdhesionField(false);
+  selectTelCountry('+225','🇨🇮');
+  document.getElementById('m-tel').value='';
+  updateComptesSelects();
+  const mCompte = document.getElementById('m-compte');
+  if(mCompte){ mCompte.value=''; mCompte.style.borderColor=''; }
+  const mCompteErr = document.getElementById('m-compte-err');
+  if(mCompteErr) mCompteErr.style.display='none';
   openModal('modal-member');
 }
 
@@ -5743,7 +5788,7 @@ function openEditMember(idx){
   if(document.getElementById('m-prenom')) document.getElementById('m-prenom').value=m.prenom||'';
   document.getElementById('m-fonction').value=m.fonction||'';
   document.getElementById('m-service').value=m.service||'';
-  document.getElementById('m-tel').value=m.tel||'';
+  setTelValue(m.tel||'');
   document.getElementById('m-email').value=m.email||'';
   document.getElementById('m-naissance').value=m.naissance||'';
   document.getElementById('m-situation').value=m.situation||'';
@@ -5832,7 +5877,7 @@ function saveMember(){
   const prenom   = '';
   const fonction = document.getElementById('m-fonction').value.trim();
   const service  = document.getElementById('m-service').value.trim();
-  const tel      = formatTel(document.getElementById('m-tel').value.trim());
+  const tel      = getTelFull() || document.getElementById('m-tel').value.trim();
   const email    = document.getElementById('m-email').value.trim();
   const naissance= document.getElementById('m-naissance').value;
   const situation= document.getElementById('m-situation').value;
@@ -5850,18 +5895,61 @@ function saveMember(){
   if(!code||code.length<4){errMsg.textContent='Le code doit avoir au moins 4 caractères.';errEl.style.display='flex';return;}
   const duplicate=members.find((m,i)=>m.code===code&&i!==idx);
   if(duplicate){errMsg.textContent=`Ce code est déjà utilisé par ${duplicate.nom}.`;errEl.style.display='flex';return;}
+
+  // Validation compte obligatoire (seulement pour nouveau membre avec versement)
+  const compteEl  = document.getElementById('m-compte');
+  const compteErr = document.getElementById('m-compte-err');
+  const compteId  = compteEl?.value||'';
+  if(idx===-1 && verse > 0 && !compteId){
+    if(compteErr) compteErr.style.display='block';
+    if(compteEl)  compteEl.style.borderColor='#DC2626';
+    errMsg.textContent='Veuillez sélectionner un compte à créditer pour le versement initial.';
+    errEl.style.display='flex';
+    return;
+  }
+  if(compteErr) compteErr.style.display='none';
+  if(compteEl)  compteEl.style.borderColor='';
   errEl.style.display='none';
 
+  const modePaiement = document.getElementById('m-mode-paiement')?.value || 'especes';
   const droitPaye = !!(document.getElementById('m-droit-paye')?.checked);
   const droitMontant = droitPaye ? (branding.droitAdhesion||0) : 0;
   const regleCotisation = document.getElementById('m-regle-cotisation')?.value || 'defaut';
   const extraFields = {email, naissance, situation, ville, enfants, droitPaye, droitMontant, regleCotisation};
+
+  const nomComplet = (prenom?(prenom+' '):'')+nom;
 
   if(idx===-1){
     const maxNum = members.length > 0 ? Math.max(...members.map(m=>Number(m.num)||0)) : 0;
     const nm={num:maxNum+1, nom, prenom, fonction, service, tel, code, quota, verse, date, actif:true, motif:'', motifDate:'', motifComment:'', ...extraFields};
     members.push(nm);
     dbPost('saveMember', nm);
+    // Créditer le compte avec le versement initial
+    if(compteId && verse > 0){
+      enregistrerTransaction({
+        compteId,
+        type:    'entree',
+        montant: verse,
+        libelle: 'Versement initial — '+nomComplet+' ('+code+')'+(droitPaye?' + Droit d\'adhésion':''),
+        source:  'adhesion',
+        sourceId: code,
+        date,
+        mode:    modePaiement,
+      });
+      // Si droit d'adhésion aussi
+      if(droitPaye && droitMontant > 0){
+        enregistrerTransaction({
+          compteId,
+          type:    'entree',
+          montant: droitMontant,
+          libelle: 'Droit d\'adhésion — '+nomComplet+' ('+code+')',
+          source:  'droit_adhesion',
+          sourceId: code,
+          date,
+          mode:    modePaiement,
+        });
+      }
+    }
   } else {
     members[idx]={...members[idx], nom, prenom, fonction, service, tel, code, quota, verse, date, ...extraFields};
     dbPost('updateMember', members[idx]);
@@ -8040,30 +8128,273 @@ function setDocFilter(cat){
 }
 
 /* ══════════════════════════════════════════
-   TÉLÉPHONE — PRÉFIXE +225 AUTOMATIQUE
+   TÉLÉPHONE — SÉLECTEUR D'INDICATIF PAYS
 ══════════════════════════════════════════ */
+
+const TEL_COUNTRIES = [
+  // ── AFRIQUE DE L'OUEST (priorité) ──
+  {flag:'🇨🇮', name:'Côte d\'Ivoire',      code:'+225'},
+  {flag:'🇸🇳', name:'Sénégal',              code:'+221'},
+  {flag:'🇲🇱', name:'Mali',                 code:'+223'},
+  {flag:'🇧🇫', name:'Burkina Faso',         code:'+226'},
+  {flag:'🇬🇳', name:'Guinée',               code:'+224'},
+  {flag:'🇬🇭', name:'Ghana',                code:'+233'},
+  {flag:'🇳🇬', name:'Nigeria',              code:'+234'},
+  {flag:'🇧🇯', name:'Bénin',               code:'+229'},
+  {flag:'🇹🇬', name:'Togo',                 code:'+228'},
+  {flag:'🇳🇪', name:'Niger',                code:'+227'},
+  {flag:'🇲🇷', name:'Mauritanie',           code:'+222'},
+  {flag:'🇬🇲', name:'Gambie',               code:'+220'},
+  {flag:'🇸🇱', name:'Sierra Leone',         code:'+232'},
+  {flag:'🇱🇷', name:'Liberia',              code:'+231'},
+  {flag:'🇬🇼', name:'Guinée-Bissau',        code:'+245'},
+  {flag:'🇨🇻', name:'Cap-Vert',             code:'+238'},
+  // ── AFRIQUE CENTRALE ──
+  {flag:'🇨🇲', name:'Cameroun',             code:'+237'},
+  {flag:'🇬🇦', name:'Gabon',                code:'+241'},
+  {flag:'🇨🇬', name:'Congo',                code:'+242'},
+  {flag:'🇨🇩', name:'RD Congo',             code:'+243'},
+  {flag:'🇨🇫', name:'Centrafrique',         code:'+236'},
+  {flag:'🇹🇩', name:'Tchad',                code:'+235'},
+  {flag:'🇬🇶', name:'Guinée équatoriale',   code:'+240'},
+  {flag:'🇸🇹', name:'São Tomé-et-Príncipe', code:'+239'},
+  // ── AFRIQUE DE L'EST ──
+  {flag:'🇰🇪', name:'Kenya',                code:'+254'},
+  {flag:'🇹🇿', name:'Tanzanie',             code:'+255'},
+  {flag:'🇺🇬', name:'Ouganda',              code:'+256'},
+  {flag:'🇷🇼', name:'Rwanda',               code:'+250'},
+  {flag:'🇧🇮', name:'Burundi',              code:'+257'},
+  {flag:'🇪🇹', name:'Éthiopie',             code:'+251'},
+  {flag:'🇸🇴', name:'Somalie',              code:'+252'},
+  {flag:'🇩🇯', name:'Djibouti',             code:'+253'},
+  {flag:'🇪🇷', name:'Érythrée',             code:'+291'},
+  {flag:'🇸🇸', name:'Soudan du Sud',        code:'+211'},
+  {flag:'🇸🇩', name:'Soudan',               code:'+249'},
+  // ── AFRIQUE AUSTRALE ──
+  {flag:'🇿🇦', name:'Afrique du Sud',       code:'+27'},
+  {flag:'🇲🇿', name:'Mozambique',           code:'+258'},
+  {flag:'🇿🇲', name:'Zambie',               code:'+260'},
+  {flag:'🇿🇼', name:'Zimbabwe',             code:'+263'},
+  {flag:'🇧🇼', name:'Botswana',             code:'+267'},
+  {flag:'🇳🇦', name:'Namibie',              code:'+264'},
+  {flag:'🇲🇼', name:'Malawi',               code:'+265'},
+  {flag:'🇦🇴', name:'Angola',               code:'+244'},
+  {flag:'🇱🇸', name:'Lesotho',              code:'+266'},
+  {flag:'🇸🇿', name:'Eswatini',             code:'+268'},
+  // ── AFRIQUE DU NORD ──
+  {flag:'🇩🇿', name:'Algérie',              code:'+213'},
+  {flag:'🇲🇦', name:'Maroc',                code:'+212'},
+  {flag:'🇹🇳', name:'Tunisie',              code:'+216'},
+  {flag:'🇱🇾', name:'Libye',                code:'+218'},
+  {flag:'🇪🇬', name:'Égypte',               code:'+20'},
+  // ── ÎLES AFRICAINES ──
+  {flag:'🇲🇬', name:'Madagascar',           code:'+261'},
+  {flag:'🇲🇺', name:'Maurice',              code:'+230'},
+  {flag:'🇷🇪', name:'La Réunion',           code:'+262'},
+  {flag:'🇸🇨', name:'Seychelles',           code:'+248'},
+  {flag:'🇰🇲', name:'Comores',              code:'+269'},
+  // ── EUROPE ──
+  {flag:'🇫🇷', name:'France',               code:'+33'},
+  {flag:'🇧🇪', name:'Belgique',             code:'+32'},
+  {flag:'🇨🇭', name:'Suisse',               code:'+41'},
+  {flag:'🇱🇺', name:'Luxembourg',           code:'+352'},
+  {flag:'🇩🇪', name:'Allemagne',            code:'+49'},
+  {flag:'🇮🇹', name:'Italie',               code:'+39'},
+  {flag:'🇪🇸', name:'Espagne',              code:'+34'},
+  {flag:'🇵🇹', name:'Portugal',             code:'+351'},
+  {flag:'🇬🇧', name:'Royaume-Uni',          code:'+44'},
+  {flag:'🇳🇱', name:'Pays-Bas',             code:'+31'},
+  {flag:'🇸🇪', name:'Suède',                code:'+46'},
+  {flag:'🇳🇴', name:'Norvège',              code:'+47'},
+  // ── AMÉRIQUES ──
+  {flag:'🇺🇸', name:'États-Unis',           code:'+1'},
+  {flag:'🇨🇦', name:'Canada',               code:'+1'},
+  {flag:'🇧🇷', name:'Brésil',               code:'+55'},
+  {flag:'🇲🇽', name:'Mexique',              code:'+52'},
+  // ── MOYEN-ORIENT ──
+  {flag:'🇸🇦', name:'Arabie Saoudite',      code:'+966'},
+  {flag:'🇦🇪', name:'Émirats Arabes Unis',  code:'+971'},
+  {flag:'🇶🇦', name:'Qatar',                code:'+974'},
+  {flag:'🇹🇷', name:'Turquie',              code:'+90'},
+  // ── ASIE / OCÉANIE ──
+  {flag:'🇨🇳', name:'Chine',                code:'+86'},
+  {flag:'🇮🇳', name:'Inde',                 code:'+91'},
+  {flag:'🇯🇵', name:'Japon',                code:'+81'},
+  {flag:'🇰🇷', name:'Corée du Sud',         code:'+82'},
+  {flag:'🇦🇺', name:'Australie',            code:'+61'},
+];
+
+let _telSelectedCode = '+225';
+let _telDropdownOpen = false;
+
+function initTelDropdown(){
+  renderTelCountries(TEL_COUNTRIES);
+  // Fermer si clic ailleurs
+  document.addEventListener('click', function(e){
+    if(!e.target.closest('#tel-flag-btn') && !e.target.closest('#tel-dropdown')){
+      closeTelDropdown();
+    }
+  });
+}
+
+function renderTelCountries(list, q){
+  const el = document.getElementById('tel-country-list');
+  if(!el) return;
+  let html = list.map(c=>`
+    <div onclick="selectTelCountry('${c.code}','${c.flag}')"
+      style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #F3F4F6"
+      onmouseover="this.style.background='#F5F3FF'" onmouseout="this.style.background=''">
+      <span style="font-size:18px">${c.flag}</span>
+      <span style="flex:1;color:var(--navy)">${c.name}</span>
+      <span style="font-family:var(--mono);color:#7C3AED;font-weight:600">${c.code}</span>
+    </div>`).join('');
+  // Option saisie manuelle si recherche ressemble à un code
+  const isCodeSearch = q && /^\+?\d+$/.test(q.trim());
+  const customCode   = isCodeSearch ? (q.startsWith('+')?q:('+'+q.replace(/\D/g,''))) : '';
+  if(isCodeSearch && customCode.length >= 2){
+    html += `<div onclick="selectTelCountry('${customCode}','🌍')"
+      style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;font-size:13px;background:#F5F3FF;border-top:2px solid #DDD6FE"
+      onmouseover="this.style.background='#EDE9FE'" onmouseout="this.style.background='#F5F3FF'">
+      <span style="font-size:18px">🌍</span>
+      <span style="flex:1;color:#5B21B6;font-weight:600">Utiliser <strong>${customCode}</strong></span>
+      <span style="font-size:11px;color:#7C3AED">✎ Personnalisé</span>
+    </div>`;
+  }
+  // Toujours afficher l'option saisie manuelle en bas
+  html += `<div onclick="openCustomCodeInput()"
+    style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;font-size:12px;background:#F9FAFB;border-top:1px solid #E5E7EB;color:#6B7280"
+    onmouseover="this.style.background='#F5F3FF'" onmouseout="this.style.background='#F9FAFB'">
+    <span style="font-size:15px">✏️</span>
+    <span>Autre — Saisir un indicatif manuellement</span>
+  </div>`;
+  el.innerHTML = html;
+}
+
+function filterTelCountries(){
+  const q = (document.getElementById('tel-country-search')?.value||'').trim();
+  const filtered = q ? TEL_COUNTRIES.filter(c=>
+    c.name.toLowerCase().includes(q.toLowerCase()) || c.code.includes(q)
+  ) : TEL_COUNTRIES;
+  renderTelCountries(filtered, q);
+}
+
+function openCustomCodeInput(){
+  const el = document.getElementById('tel-country-list');
+  if(!el) return;
+  el.innerHTML = `<div style="padding:12px 14px">
+    <div style="font-size:12px;color:#6B7280;margin-bottom:8px">Saisissez votre indicatif (ex: +1, +49, +971…)</div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <input type="text" id="tel-custom-input" placeholder="+XXX" maxlength="6"
+        oninput="previewCustomCode()"
+        onkeydown="if(event.key===\'Enter\') confirmCustomCode()"
+        style="flex:1;padding:8px 10px;border:1.5px solid #7C3AED;border-radius:6px;font-size:15px;font-weight:700;font-family:var(--mono);color:#5B21B6"/>
+      <button onclick="confirmCustomCode()"
+        style="padding:8px 14px;background:#7C3AED;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">✓ OK</button>
+    </div>
+    <div id="tel-custom-preview" style="font-size:11px;color:#7C3AED;margin-top:6px"></div>
+    <button onclick="filterTelCountries()"
+      style="margin-top:8px;font-size:11px;color:#6B7280;background:none;border:none;cursor:pointer;text-decoration:underline">← Retour à la liste</button>
+  </div>`;
+  setTimeout(()=>document.getElementById('tel-custom-input')?.focus(), 50);
+}
+
+function previewCustomCode(){
+  const val = (document.getElementById('tel-custom-input')?.value||'').trim();
+  const preview = document.getElementById('tel-custom-preview');
+  if(!preview) return;
+  const code = val.startsWith('+') ? val : (val ? '+'+val.replace(/\D/g,'') : '');
+  const numEx = (document.getElementById('m-tel')?.value||'').replace(/\D/g,'')||'XXXXXXXXX';
+  preview.textContent = code.length>=2 ? '📱 Aperçu : '+code+' '+numEx : '';
+}
+
+function confirmCustomCode(){
+  const val = (document.getElementById('tel-custom-input')?.value||'').trim();
+  if(!val) return;
+  const code = val.startsWith('+') ? val : '+'+val.replace(/\D/g,'');
+  if(code.length < 2) return;
+  selectTelCountry(code, '🌍');
+}
+
+
+function toggleTelDropdown(){
+  _telDropdownOpen ? closeTelDropdown() : openTelDropdown();
+}
+
+function openTelDropdown(){
+  const dd = document.getElementById('tel-dropdown');
+  if(dd){ dd.style.display='block'; _telDropdownOpen=true; }
+  const si = document.getElementById('tel-country-search');
+  if(si){ si.value=''; si.focus(); filterTelCountries(); }
+}
+
+function closeTelDropdown(){
+  const dd = document.getElementById('tel-dropdown');
+  if(dd){ dd.style.display='none'; _telDropdownOpen=false; }
+}
+
+function selectTelCountry(code, flag){
+  _telSelectedCode = code;
+  const flagEl = document.getElementById('tel-flag-display');
+  const codeEl = document.getElementById('tel-code-display');
+  if(flagEl) flagEl.textContent = flag;
+  if(codeEl) codeEl.textContent = code;
+  closeTelDropdown();
+  onTelInput();
+  document.getElementById('m-tel')?.focus();
+}
+
+function onTelInput(){
+  const input = document.getElementById('m-tel');
+  const preview = document.getElementById('tel-preview');
+  if(!input || !preview) return;
+  const digits = input.value.replace(/\D/g,'');
+  if(digits.length > 0){
+    preview.textContent = '📱 Numéro complet : ' + _telSelectedCode + ' ' + digits;
+  } else {
+    preview.textContent = '';
+  }
+}
+
+function getTelFull(){
+  const input = document.getElementById('m-tel');
+  if(!input || !input.value.trim()) return '';
+  const digits = input.value.replace(/\D/g,'');
+  if(!digits) return '';
+  return _telSelectedCode + digits;
+}
+
+function setTelValue(fullTel){
+  // Remplir le champ depuis un numéro complet existant (ex: +2250712345678)
+  if(!fullTel){ return; }
+  // Trouver l'indicatif correspondant
+  const match = TEL_COUNTRIES.find(c=> fullTel.startsWith(c.code));
+  if(match){
+    _telSelectedCode = match.code;
+    const flagEl = document.getElementById('tel-flag-display');
+    const codeEl = document.getElementById('tel-code-display');
+    if(flagEl) flagEl.textContent = match.flag;
+    if(codeEl) codeEl.textContent = match.code;
+    const num = fullTel.substring(match.code.length);
+    const input = document.getElementById('m-tel');
+    if(input) input.value = num;
+  } else {
+    const input = document.getElementById('m-tel');
+    if(input) input.value = fullTel;
+  }
+  onTelInput();
+}
+
 function formatTel(raw){
   if(!raw) return '';
-  // Remove all non-digits
-  let digits = raw.replace(/\D/g,'');
-  // If starts with 225, keep as is; if starts with 0, prepend 225
-  if(digits.startsWith('225')) {
-    // already has country code — ensure leading +
-    return '+' + digits;
-  }
-  if(digits.length === 0) return '';
-  // Prepend Ivory Coast code
-  return '+225' + digits;
+  // Si déjà un numéro complet avec indicatif → retourner tel quel
+  if(raw.startsWith('+')) return raw;
+  const digits = raw.replace(/\D/g,'');
+  if(!digits) return '';
+  return _telSelectedCode + digits;
 }
 
 function formatTelInput(el){
-  const raw = el.value;
-  if(!raw.trim()) return;
-  // Only format when there's something meaningful
-  const digits = raw.replace(/\D/g,'');
-  if(digits.length >= 8){
-    el.value = formatTel(raw);
-  }
+  // Legacy — ne rien faire, géré par onTelInput
 }
 
 /* ══════════════════════════════════════════
@@ -13013,7 +13344,9 @@ let branding = {
 
     if(branding.nom || branding.color || branding.logoUrl){
       if(document.readyState === 'loading'){
-        document.addEventListener('DOMContentLoaded', applyBranding);
+        document.addEventListener('DOMContentLoaded', function(){
+  initTelDropdown();
+});
       } else {
         applyBranding();
       }
