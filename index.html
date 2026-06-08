@@ -8355,6 +8355,14 @@ const TEL_COUNTRIES = [
 
 let _telSelectedCode = '+225';
 let _telDropdownOpen = false;
+// Initialiser le bouton indicatif dès le chargement (avant initTelDropdown)
+document.addEventListener('DOMContentLoaded', function(){
+  const flagEl = document.getElementById('tel-flag-display');
+  const codeEl = document.getElementById('tel-code-display');
+  if(flagEl) flagEl.textContent = '🇨🇮';
+  if(codeEl) codeEl.textContent = '+225';
+  initTelDropdown();
+});
 
 function initTelDropdown(){
   // Peupler le select de Personnalisation
@@ -13608,8 +13616,8 @@ let branding = {
     if(branding.nom || branding.color || branding.logoUrl){
       if(document.readyState === 'loading'){
         document.addEventListener('DOMContentLoaded', function(){
-  initTelDropdown();
-});
+          applyBranding();
+        });
       } else {
         applyBranding();
       }
