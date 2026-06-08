@@ -13073,64 +13073,101 @@ function renderRapport(){
   // Mois de l'année
   const moisAnnee = getMonthsForYear(annee);
 
-  // Calculs globaux
+  // Calculs globaux (toute l'année)
   const totalCotisNorm = moisAnnee.reduce((s,mn)=>
     s + actifs.reduce((a,m)=>{ const p=getMoisPaidList(m,annee); return a+(p.includes(mn)?m.quota:0); },0), 0);
-  // Cotisations exceptionnelles filtrées par année (via dateCreation)
+
+  // Cotisations exceptionnelles filtrées par année
   const excDeAnnee = excCotisations.filter(exc=>{
     if(!exc.dateCreation) return false;
     const yr = new Date(exc.dateCreation).getFullYear();
     return !isNaN(yr) && String(yr) === annee;
   });
   const totalCotisExc = excDeAnnee.reduce((s,exc)=>
-    s + Object.values(exc.paiements||{}).reduce((a,v)=>a+v,0), 0);
-  const totalDepGlobal = depenses.filter(d=>(d.annee||'2026')===annee).reduce((s,d)=>s+d.montant,0);
+    s + Object.values(exc.paiements||{}).reduce((a,v)=>a+Number(v),0), 0);
 
-  // Dons en espèces sur toute l'année (ajoutés aux recettes)
-  const donsEspGlobal = dons.filter(d=>d.type==='especes'&&(d.annee||'2026')===annee)
-    .reduce((s,d)=>s+(Number(d.montant)||0),0);
+  // Dépenses toute l'année — utiliser la date réelle si annee absent
+  const totalDepGlobal = depenses.filter(d=>{
+    const a = d.annee || (d.date?String(new Date(d.date).getFullYear()):'');
+    return a === annee;
+  }).reduce((s,d)=>s+Number(d.montant||0),0);
 
-  // Assistances sur toute l'année
+  // Dons en espèces toute l'année
+  const donsEspGlobal = dons.filter(d=>{
+    if(d.type!=='especes') return false;
+    const a = d.annee || (d.date?String(new Date(d.date).getFullYear()):'');
+    return a === annee;
+  }).reduce((s,d)=>s+(Number(d.montant)||0),0);
+
+  // Assistances toute l'année
   const assistGlobal = assistances.filter(a=>{
-    const raw = a.dateVerse || a.dateEvent || '';
+    const raw = a.dateVerse || a.dateEvent || a.date || '';
     if(!raw) return false;
     const d = new Date(raw);
     return !isNaN(d) && String(d.getFullYear())===annee;
   }).reduce((s,a)=>s+(Number(a.montant)||0), 0);
 
-  // Droits d'adhésion (recette unique — comptés une seule fois, pas par année)
-  const totalDroitsAdh = members.filter(m=>m.droitPaye).reduce((s,m)=>s+(m.droitMontant||0),0);
+  // Droits d'adhésion — filtrés par année d'adhésion (date du membre)
+  const membresDroitAnnee = members.filter(m=>{
+    if(!m.droitPaye || !Number(m.droitMontant)) return false;
+    if(!m.date) return false;
+    return String(new Date(m.date).getFullYear()) === annee;
+  });
+  const totalDroitsAdh = membresDroitAnnee.reduce((s,m)=>s+(Number(m.droitMontant)||0),0);
 
-  // Solde global = calculé récursivement (inclut report N-1, N-2...)
-  const _sp = calculerSoldeAnnee(annee) - (totalCotisNorm + totalCotisExc + totalDroitsAdh + donsEspGlobal - totalDepGlobal - assistGlobal);
+  // Report exercice précédent (solde clôturé année N-1)
+  const reportPrecedent = (() => {
+    const annees = [..._anneesDisponibles].sort();
+    const idx = annees.indexOf(annee);
+    if(idx <= 0) return Number(branding.soldePrecedent)||0;
+    return Math.max(0, calculerSoldeAnnee(annees[idx-1]));
+  })();
+
+  // Solde annuel global
   const soldeGlobal = calculerSoldeAnnee(annee);
 
-  // Calculs période
+  // ── CALCULS PÉRIODE ──
   const cotisNormP = moisList.reduce((s,mn)=>
     s + actifs.reduce((a,m)=>{ const p=getMoisPaidList(m,annee); return a+(p.includes(mn)?m.quota:0); },0), 0);
+
   const cotisExcP = excDeAnnee.filter(exc=>moisList.includes(excMois(exc)))
-    .reduce((s,exc)=>s+Object.values(exc.paiements||{}).reduce((a,v)=>a+v,0),0);
+    .reduce((s,exc)=>s+Object.values(exc.paiements||{}).reduce((a,v)=>a+Number(v),0),0);
 
-  // Dons en espèces sur la période
-  const donsEspP = dons.filter(d=>
-    d.type==='especes' &&
-    moisList.includes(d.mois||'') &&
-    (d.annee||'2026')===annee
-  ).reduce((s,d)=>s+(Number(d.montant)||0),0);
+  // Dons espèces sur la période
+  const donsEspP = dons.filter(d=>{
+    if(d.type!=='especes') return false;
+    const a = d.annee || (d.date?String(new Date(d.date).getFullYear()):'');
+    if(a !== annee) return false;
+    const moisDon = d.mois || (d.date?ALL_MONTHS[new Date(d.date).getMonth()]:'');
+    return moisList.includes(moisDon);
+  }).reduce((s,d)=>s+(Number(d.montant)||0),0);
 
-  const totalDroitsAdhP = members.filter(m=>m.droitPaye).reduce((s,m)=>s+(m.droitMontant||0),0);
-  const nbDroitsPayes   = members.filter(m=>m.droitPaye).length;
+  // Droits d'adhésion sur la période
+  const membresDroitP = membresDroitAnnee.filter(m=>{
+    if(!m.date) return false;
+    const moisAdh = ALL_MONTHS[new Date(m.date).getMonth()];
+    return moisList.includes(moisAdh);
+  });
+  const totalDroitsAdhP = membresDroitP.reduce((s,m)=>s+(Number(m.droitMontant)||0),0);
+  const nbDroitsPayes   = membresDroitP.length;
 
+  // Total recettes période
   const totalRecP = cotisNormP + cotisExcP + donsEspP + totalDroitsAdhP;
 
-  const depP   = depenses.filter(d=>moisList.includes(d.mois)&&(d.annee||'2026')===annee);
-  const totalD = depP.reduce((s,d)=>s+d.montant,0);
-  const dAct   = depP.filter(d=>d.type==='activite').reduce((s,d)=>s+d.montant,0);
-  const dFon   = depP.filter(d=>d.type==='fonctionnement').reduce((s,d)=>s+d.montant,0);
+  // Dépenses période
+  const depP = depenses.filter(d=>{
+    const a = d.annee || (d.date?String(new Date(d.date).getFullYear()):'');
+    if(a !== annee) return false;
+    const moisDep = d.mois || (d.date?ALL_MONTHS[new Date(d.date).getMonth()]:'');
+    return moisList.includes(moisDep);
+  });
+  const totalD = depP.reduce((s,d)=>s+Number(d.montant||0),0);
+  const dAct   = depP.filter(d=>d.type==='activite').reduce((s,d)=>s+Number(d.montant||0),0);
+  const dFon   = depP.filter(d=>d.type==='fonctionnement').reduce((s,d)=>s+Number(d.montant||0),0);
 
-  // Assistances sur la période
+  // Assistances période
   const assistP = assistances.filter(a=>{
-    const raw = a.dateVerse || a.dateEvent || '';
+    const raw = a.dateVerse || a.dateEvent || a.date || '';
     if(!raw) return false;
     const d = new Date(raw);
     if(isNaN(d)) return false;
@@ -13141,7 +13178,14 @@ function renderRapport(){
   // Solde période = Recettes - Dépenses - Assistances
   const soldePeriode = totalRecP - totalD - totalAssistP;
 
-  const nbAjour = actifs.filter(m=>moisList.every(mo=>getMoisPaidList(m,annee).includes(mo))).length;
+  // Membres à jour sur la période sélectionnée
+  const nbAjour = actifs.filter(m=>{
+    const paid = getMoisPaidList(m, annee);
+    // À jour = a payé au moins un mois de la période (pour mensuel)
+    // ou tous les mois de la période (pour annuel/trimestriel)
+    if(moisList.length === 1) return paid.includes(moisList[0]);
+    return moisList.every(mo=>paid.includes(mo));
+  }).length;
 
   // HTML par sections
   let html = '';
@@ -13166,7 +13210,7 @@ function renderRapport(){
     + '<div style="background:#EDE9FE;border-radius:8px;padding:12px;text-align:center"><div style="font-size:16px;font-weight:700;color:#5B21B6">'+cotisExcP.toLocaleString('fr-FR')+' F</div><div style="font-size:11px;color:#5B21B6;margin-top:3px">⚡ Cotisations exceptionnelles</div></div>'
     + '<div style="background:#ECFDF5;border-radius:8px;padding:12px;text-align:center"><div style="font-size:16px;font-weight:700;color:#065F46">'+donsEspP.toLocaleString('fr-FR')+' F</div><div style="font-size:11px;color:#065F46;margin-top:3px">🎁 Dons en espèces</div></div>'
     + (totalDroitsAdhP>0 ? '<div style="background:#FEF9C3;border-radius:8px;padding:12px;text-align:center"><div style="font-size:16px;font-weight:700;color:#92400E">'+totalDroitsAdhP.toLocaleString('fr-FR')+' F</div><div style="font-size:11px;color:#92400E;margin-top:3px">💳 Droits d\'adhésion<br><span style="font-size:10px">('+nbDroitsPayes+' membre(s))</span></div></div>' : '')
-    + (_sp>0 ? '<div style="background:#EFF6FF;border-radius:8px;padding:12px;text-align:center"><div style="font-size:16px;font-weight:700;color:#1E40AF">'+_sp.toLocaleString('fr-FR')+' F</div><div style="font-size:11px;color:#1E40AF;margin-top:3px">🏦 Report exercice précédent</div></div>' : '')
+    + (reportPrecedent>0 ? '<div style="background:#EFF6FF;border-radius:8px;padding:12px;text-align:center"><div style="font-size:16px;font-weight:700;color:#1E40AF">'+reportPrecedent.toLocaleString('fr-FR')+' F</div><div style="font-size:11px;color:#1E40AF;margin-top:3px">🏦 Report exercice précédent</div></div>' : '')
     + '<div style="background:var(--green-light);border-radius:8px;padding:12px;text-align:center"><div style="font-size:16px;font-weight:700;color:var(--green)">'+totalRecP.toLocaleString('fr-FR')+' F</div><div style="font-size:11px;color:var(--green);margin-top:3px">Total recettes</div></div>'
     + '</div>';
 
@@ -15539,7 +15583,9 @@ function calculerSoldeAnnee(annee){
     if(!exc.dateCreation) return false;
     return String(new Date(exc.dateCreation).getFullYear())===yr;
   }).reduce((s,exc)=>s+Object.values(exc.paiements||{}).reduce((a,v)=>a+v,0),0);
-  const droits   = yr===annees[0] ? members.filter(m=>m.droitPaye).reduce((s,m)=>s+(m.droitMontant||0),0) : 0;
+  const droits   = members.filter(m=>m.droitPaye && m.droitMontant &&
+    m.date && String(new Date(m.date).getFullYear())===yr
+  ).reduce((s,m)=>s+(Number(m.droitMontant)||0),0);
   const donsEsp  = dons.filter(d=>d.type==='especes'&&(d.annee||'2026')===yr).reduce((s,d)=>s+(Number(d.montant)||0),0);
   const dep      = depenses.filter(d=>(d.annee||'2026')===yr).reduce((s,d)=>s+d.montant,0);
   const assist   = assistances.filter(a=>{
