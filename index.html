@@ -3294,7 +3294,8 @@ html, body {
       </div>
       <div class="field">
         <label>Versement initial (FCFA)</label>
-        <input type="number" id="m-verse" value="1000" min="1000" step="1000"/>
+        <input type="number" id="m-verse" value="0" min="0" step="500" placeholder="0"/>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:3px">Saisissez 0 si aucun versement à l'adhésion. Le compte n'est obligatoire que si versement > 0.</div>
       </div>
       <div class="field">
         <label>Compte à créditer <span style="color:#DC2626">*</span></label>
@@ -5817,7 +5818,7 @@ function openAddMember(){
   document.getElementById('m-naissance').value='';
   document.getElementById('m-situation').value='';
   document.getElementById('m-quota').value=1000;
-  document.getElementById('m-verse').value=1000;
+  document.getElementById('m-verse').value=0;
   document.getElementById('m-date').value='2026-03-01';
   document.getElementById('m-code').value='';
   document.getElementById('code-slip').style.display='none';
@@ -5918,13 +5919,16 @@ function _initDroitAdhesionField(checked){
   const badge   = document.getElementById('m-droit-montant-badge');
   const lbl     = document.getElementById('m-droit-label');
   if(!field) return;
-  if(!montant){
-    field.style.display='none'; return;
-  }
+  // Toujours afficher le champ — l'admin choisit de cocher ou non
   field.style.display='block';
   if(cb)    cb.checked = !!checked;
-  if(badge) badge.textContent = fmt(montant);
-  if(lbl)   lbl.textContent   = `Droit d'adhésion payé (${fmt(montant)})`;
+  if(montant > 0){
+    if(badge) badge.textContent = fmt(montant)+' FCFA';
+    if(lbl)   lbl.textContent   = `Droit d'adhésion payé (${fmt(montant)} FCFA)`;
+  } else {
+    if(badge) badge.textContent = '';
+    if(lbl)   lbl.textContent   = `Droit d'adhésion payé (montant non configuré)`;
+  }
 }
 
 function saveMember(){
@@ -5940,7 +5944,7 @@ function saveMember(){
   const enfants  = document.getElementById('m-enfants')?.value!==''?parseInt(document.getElementById('m-enfants').value):null;
   const code     = document.getElementById('m-code').value.trim().toUpperCase();
   const quota    = parseInt(document.getElementById('m-quota').value)||1000;
-  const verse    = parseInt(document.getElementById('m-verse').value)||1000;
+  const verse    = parseInt(document.getElementById('m-verse').value)||0;
   const date     = document.getElementById('m-date').value;
   const idx      = parseInt(document.getElementById('edit-member-idx').value);
   const errEl    = document.getElementById('modal-err');
