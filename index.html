@@ -7516,23 +7516,54 @@ async function _uploadFileChunks(sheetId, file){
   const CHUNK  = 40000; // 40KB — pas de limite URL avec fetch POST
   const data   = file.dataUrl;
   const total  = Math.ceil(data.length / CHUNK);
-  const progEl = document.getElementById('doc-upload-progress');
+  const progEl = document.getElementById('doc-upload-float');
   const pctEl  = document.getElementById('doc-upload-pct');
   const barEl  = document.getElementById('doc-upload-bar');
   const stEl   = document.getElementById('doc-upload-status');
+  const fnEl   = document.getElementById('doc-float-filename');
+  const titEl  = document.getElementById('doc-float-title');
   if(progEl) progEl.style.display='block';
+  if(fnEl)   fnEl.textContent = file.name+' ('+fmtSize(file.size)+')';
+  if(titEl)  titEl.textContent = 'Envoi du document…';
 
-  function setP(pct,status){
-    if(pctEl) pctEl.textContent=pct+'%';
-    if(barEl) barEl.style.width=pct+'%';
-    if(stEl)  stEl.textContent=status;
+  // Mettre à jour une étape : 'active' | 'done' | 'error' | 'pending'
+  function setStep(id, state){
+    const row = document.getElementById('step-'+id);
+    const dot = document.getElementById('dot-'+id);
+    if(!row||!dot) return;
+    const colors = {active:'#1D4ED8', done:'#16A34A', error:'#DC2626', pending:'#9CA3AF'};
+    const bgs    = {active:'#DBEAFE', done:'#DCFCE7', error:'#FEE2E2', pending:'#E5E7EB'};
+    const icons  = {active:'⟳', done:'✓', error:'✗', pending: dot.textContent};
+    row.style.color  = colors[state];
+    dot.style.background = bgs[state];
+    dot.style.color  = colors[state];
+    if(state!=='pending') dot.textContent = icons[state];
+  }
+
+  function setP(pct, status){
+    if(pctEl) pctEl.textContent = pct+'%';
+    if(barEl) barEl.style.width = pct+'%';
+    if(stEl)  stEl.textContent  = status;
+    // Couleur barre selon progression
+    if(barEl){
+      if(pct===100)      barEl.style.background='linear-gradient(90deg,#16A34A,#4ADE80)';
+      else if(pct >= 75) barEl.style.background='linear-gradient(90deg,#0F766E,#14B8A6)';
+      else               barEl.style.background='linear-gradient(90deg,#1D4ED8,#60A5FA)';
+    }
   }
 
   setP(5,'Lecture du fichier…');
+  setStep('save','active');
+  setStep('upload','pending');
+  setStep('confirm','pending');
+  setStep('done','pending');
   console.log('[Doc] Upload fichier:', file.name, file.size, 'octets, id:', sheetId);
 
-  // ── Envoyer le fichier complet en UN SEUL POST (pas de chunks, pas de limite URL) ──
-  setP(30,'Envoi vers Google Drive…');
+  // ── Envoyer le fichier complet en UN SEUL POST ──
+  setP(20,'Enregistrement dans Sheets…');
+  setStep('save','done');
+  setStep('upload','active');
+  setP(35,'Envoi vers Google Drive…');
   let uploadOk = false;
   try{
     const resp = await fetch(GAS_URL, {
@@ -7564,13 +7595,15 @@ async function _uploadFileChunks(sheetId, file){
     return;
   }
 
-  setP(60,'Traitement sur Google Drive…');
+  setStep('upload','done');
+  setStep('confirm','active');
+  setP(60,'Attente confirmation Drive…');
 
   // ── Poller getDocumentUrl toutes les 5s jusqu'à 90s ──
   let fileUrl = '';
   for(let attempt=0; attempt<18; attempt++){
     await new Promise(res=>setTimeout(res,5000));
-    setP(60+attempt*2, 'Attente Drive… ('+(attempt+1)+'/18)');
+    setP(60+attempt*2, 'Vérification Drive… ('+( attempt+1)+'/18)');
     try{
       const r = await dbGet('getDocumentUrl',{docId:sheetId});
       console.log('[Doc] Poll '+attempt+':', r);
@@ -7581,9 +7614,12 @@ async function _uploadFileChunks(sheetId, file){
     }catch(e){ console.warn('[Doc] Poll erreur:', e); }
   }
 
-  if(progEl) progEl.style.display='none';
-
   if(fileUrl){
+    setStep('confirm','done');
+    setStep('done','done');
+    setP(100,'✅ Document disponible !');
+    if(titEl) titEl.textContent='Upload terminé ✅';
+    if(barEl) barEl.style.background='linear-gradient(90deg,#16A34A,#4ADE80)';
     // Mettre à jour localement + cache
     const di=documents.findIndex(d=>d.id===sheetId);
     if(di>=0) documents[di].fileUrl=fileUrl;
@@ -7594,10 +7630,10 @@ async function _uploadFileChunks(sheetId, file){
     if(box) box.style.display='block';
     if(lnk){lnk.href=fileUrl;lnk.textContent=fileUrl;}
     _showDocToast('✅ Fichier disponible sur Google Drive !');
-    setP(100,'Terminé !');
   } else {
-    // Dernier recours : recharger depuis Sheets
-    _showDocToast('⚠️ Vérification dans Sheets…');
+    setStep('confirm','error');
+    setP(80,'⚠️ Drive non confirmé — rechargement…');
+    if(titEl) titEl.textContent='Vérification en cours…';
     setTimeout(async()=>{
       try{
         const data2 = await dbGet('getDocuments');
@@ -7606,8 +7642,21 @@ async function _uploadFileChunks(sheetId, file){
           try{lsSet('mc_documents',JSON.stringify(documents));}catch(e){}
           renderDocsAdmin();
           const d2=documents.find(d=>d.id===sheetId);
-          if(d2?.fileUrl) _showDocToast('✅ Document disponible !');
-          else _showDocToast('⚠️ Drive non disponible. Vérifiez le déploiement GAS puis réessayez.');
+          if(d2?.fileUrl){
+            setStep('confirm','done');
+            setStep('done','done');
+            setP(100,'✅ Document disponible !');
+            if(titEl) titEl.textContent='Upload terminé ✅';
+            const box=document.getElementById('doc-drive-link-box');
+            const lnk=document.getElementById('doc-drive-link');
+            if(box) box.style.display='block';
+            if(lnk){lnk.href=d2.fileUrl;lnk.textContent=d2.fileUrl;}
+            _showDocToast('✅ Document disponible !');
+          } else {
+            setStep('done','error');
+            if(stEl) stEl.textContent='⚠️ Vérifiez le déploiement GAS puis réessayez.';
+            _showDocToast('⚠️ Drive non disponible. Vérifiez le déploiement GAS.');
+          }
         }
       }catch(e){}
     }, 3000);
@@ -16287,6 +16336,37 @@ function showReadonlyBanner(){
       </div>
     </div>
   </div>
+
+<!-- ══ PANNEAU UPLOAD DOCUMENT FLOTTANT ══ -->
+<div id="doc-upload-float" style="display:none;position:fixed;bottom:24px;right:24px;z-index:9999;width:320px;background:#fff;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.18);border:1.5px solid #E5E7EB;overflow:hidden;font-family:var(--font-sans,Arial,sans-serif)">
+  <div style="background:linear-gradient(135deg,#0F2544,#1D4ED8);padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div id="doc-float-icon" style="font-size:20px">📤</div>
+      <div>
+        <div style="color:#fff;font-weight:700;font-size:13px" id="doc-float-title">Envoi du document</div>
+        <div style="color:rgba(255,255,255,0.7);font-size:11px" id="doc-float-filename">…</div>
+      </div>
+    </div>
+    <div style="color:#fff;font-weight:800;font-size:18px;font-family:monospace" id="doc-upload-pct">0%</div>
+  </div>
+  <div style="padding:12px 16px 10px">
+    <div id="doc-float-steps" style="margin-bottom:10px">
+      <div id="step-save"    style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px;color:#9CA3AF"><span id="dot-save"    style="width:18px;height:18px;border-radius:50%;background:#E5E7EB;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;font-weight:700">1</span><span>Enregistrement dans Sheets</span></div>
+      <div id="step-upload"  style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px;color:#9CA3AF"><span id="dot-upload"  style="width:18px;height:18px;border-radius:50%;background:#E5E7EB;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;font-weight:700">2</span><span>Envoi du fichier vers Google Drive</span></div>
+      <div id="step-confirm" style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px;color:#9CA3AF"><span id="dot-confirm" style="width:18px;height:18px;border-radius:50%;background:#E5E7EB;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;font-weight:700">3</span><span>Confirmation du lien Drive</span></div>
+      <div id="step-done"    style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px;color:#9CA3AF"><span id="dot-done"    style="width:18px;height:18px;border-radius:50%;background:#E5E7EB;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;font-weight:700">4</span><span>Document disponible</span></div>
+    </div>
+    <div style="height:8px;background:#F3F4F6;border-radius:4px;overflow:hidden;margin-bottom:6px">
+      <div id="doc-upload-bar" style="width:0%;height:100%;border-radius:4px;transition:width 0.5s ease;background:linear-gradient(90deg,#0F766E,#14B8A6)"></div>
+    </div>
+    <div id="doc-upload-status" style="font-size:11px;color:#6B7280;margin-bottom:6px">Démarrage…</div>
+    <div id="doc-drive-link-box" style="display:none;padding:8px 10px;background:#EFF6FF;border:1px solid #93C5FD;border-radius:8px;margin-top:4px">
+      <div style="font-size:11px;font-weight:600;color:#1D4ED8;margin-bottom:4px">✅ Disponible sur Google Drive</div>
+      <a id="doc-drive-link" href="#" target="_blank" rel="noopener" style="font-size:10px;color:#2563EB;word-break:break-all;font-family:monospace;display:block;margin-bottom:6px"></a>
+      <button onclick="document.getElementById('doc-upload-float').style.display='none'" style="width:100%;padding:6px;background:#1D4ED8;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">Fermer</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
