@@ -4219,12 +4219,20 @@ async function loadFromSheets(){
     Object.assign(branding, data.branding);
     // Restaurer la config du mois de début pour l'année configurée
     if(branding.debutMois !== undefined && branding.annee){
-      // Corriger l'ancienne valeur erronée (2=Mars était le défaut HTML)
-      // Si = 2 et que l'admin n'a pas explicitement défini Mars, forcer à 0 (Janvier)
       let debutVal = parseInt(branding.debutMois);
-      if(debutVal === 2 && !branding.debutMoisManual) debutVal = 0;
+      // Si debutMoisManual n'est pas true → toujours forcer à 0 (Janvier)
+      // L'ancienne valeur 2 (Mars) était un bug du HTML par défaut
+      if(!branding.debutMoisManual) debutVal = 0;
       branding.debutMois = debutVal;
-      ANNEE_CONFIG[String(branding.annee)] = {debutIdx: debutVal};
+      // Appliquer à toutes les années connues
+      Object.keys(ANNEE_CONFIG).forEach(yr => {
+        ANNEE_CONFIG[yr] = {debutIdx: debutVal};
+      });
+    } else {
+      // Pas de config → Janvier pour toutes les années
+      Object.keys(ANNEE_CONFIG).forEach(yr => {
+        ANNEE_CONFIG[yr] = {debutIdx: 0};
+      });
     }
     // Restaurer les années sauvegardées manuellement (fusionner sans écraser)
     if(branding.annees){
@@ -5993,26 +6001,45 @@ function saveMember(){
     // Créditer le compte avec le versement initial
     if(compteId && verse > 0){
       enregistrerTransaction({
-        compteId,
-        type:    'entree',
-        montant: verse,
-        libelle: 'Versement initial — '+nomComplet+' ('+code+')'+(droitPaye?' + Droit d\'adhésion':''),
-        source:  'adhesion',
-        sourceId: code,
-        date,
-        mode:    modePaiement,
+        compteId, type:'entree', montant:verse,
+        libelle:'Versement initial — '+nomComplet+' ('+code+')'+(droitPaye?' + Droit d\'adhésion':''),
+        source:'adhesion', sourceId:code, date, mode:modePaiement,
       });
-      // Si droit d'adhésion aussi
+      // Créer le(s) paiement(s) dans PAIEMENTS pour que le rapport AG les prenne en compte
+      const dateObj   = new Date(date);
+      const moisAdh   = dateObj.getMonth()+1; // 1-12
+      const anneeAdh  = String(dateObj.getFullYear());
+      const nomMoisAdh = ALL_MONTHS[dateObj.getMonth()]; // ex: 'Janvier'
+      // Calculer combien de mois couvre le versement initial
+      const nbMoisVerses = quota > 0 ? Math.min(Math.floor(verse / quota), 12) : 0;
+      for(let i=0; i<nbMoisVerses; i++){
+        const moisPay = moisAdh + i;
+        const moisReel = ((moisPay - 1) % 12) + 1;
+        const anneeReel = moisPay > 12 ? String(Number(anneeAdh)+1) : anneeAdh;
+        const payRecord = {
+          id:        'pay_'+code+'_'+moisReel+'_'+anneeReel,
+          memberCode: code,
+          mois:       moisReel,
+          annee:      anneeReel,
+          montant:    quota,
+          date:       date,
+          mode:       modePaiement,
+          compteId:   compteId,
+          source:     'versement_initial',
+        };
+        // Vérifier que ce mois n'est pas déjà payé
+        const alreadyPaid = payments.some(p=>String(p.memberCode)===code && Number(p.mois)===moisReel && String(p.annee)===anneeReel);
+        if(!alreadyPaid){
+          payments.push(payRecord);
+          dbPost('savePaiement', payRecord);
+        }
+      }
+      // Si droit d'adhésion
       if(droitPaye && droitMontant > 0){
         enregistrerTransaction({
-          compteId,
-          type:    'entree',
-          montant: droitMontant,
-          libelle: 'Droit d\'adhésion — '+nomComplet+' ('+code+')',
-          source:  'droit_adhesion',
-          sourceId: code,
-          date,
-          mode:    modePaiement,
+          compteId, type:'entree', montant:droitMontant,
+          libelle:'Droit d\'adhésion — '+nomComplet+' ('+code+')',
+          source:'droit_adhesion', sourceId:code, date, mode:modePaiement,
         });
       }
     }
@@ -9953,10 +9980,18 @@ function genererBilanAG(){
     return 0;
   }
 
-  // Filtrer selon le mode de période
+  // Filtrer selon le mode de période — utiliser p.date en fallback si p.annee absent
   const paymentsPeriode = dateDebutStr && dateFinStr
     ? payments.filter(p=>{ const d=p.date||`${p.annee||annee}-${String(moisToNum(p.mois)||1).padStart(2,'0')}-01`; return d>=dateDebutStr&&d<=dateFinStr; })
-    : payments.filter(p=>String(p.annee||'')===String(annee)&&moisToNum(p.mois)>=moisDebut&&moisToNum(p.mois)<=moisFin);
+    : payments.filter(p=>{
+        const pAnnee = String(p.annee||'');
+        const pDate  = p.date||'';
+        // Extraire l'année depuis la date si annee absent
+        const effectiveAnnee = pAnnee || (pDate ? pDate.substring(0,4) : '');
+        if(effectiveAnnee !== String(annee)) return false;
+        const mn = moisToNum(p.mois) || (pDate ? new Date(pDate).getMonth()+1 : 0);
+        return mn >= moisDebut && mn <= moisFin;
+      });
 
   for(let m=moisDebut; m<=moisFin; m++){
     const montantMois = paymentsPeriode.filter(p=>moisToNum(p.mois)===m).reduce((s,p)=>s+Number(p.montant||0),0);
@@ -10000,27 +10035,34 @@ function genererBilanAG(){
   // ─────────────────────────────────────
   // 3b. DROITS D'ADHÉSION
   // ─────────────────────────────────────
-  // Les droits d'adhésion sont liés aux membres selon leur date d'adhésion
-  // Droits d'adhésion — tous les membres ayant payé (recette unique, pas filtrée par période)
+  const montantDroitRef = Number(branding.droitAdhesion)||0; // montant de référence configuré
   const membresAvecDroit = members.filter(m=>{
-    if(!m.droitPaye || !Number(m.droitMontant)) return false;
-    // Filtrer par date d'adhésion si la période est renseignée
+    // Normaliser droitPaye — peut être string "true"/"false" depuis Sheets
+    const dp = m.droitPaye===true || m.droitPaye==='true' || m.droitPaye==='1' || m.droitPaye===1;
+    if(!dp) return false;
+    // Filtrer par date d'adhésion selon la période
     if(dateDebutStr && dateFinStr){
       const dateAdh = m.date||'';
       return dateAdh>=dateDebutStr && dateAdh<=dateFinStr;
     }
-    // Sans filtre dates : filtrer par année d'adhésion
-    // Si aucune date → inclure quand même
     if(!m.date) return true;
     const anneeAdh = m.date.substring(0,4);
     return String(anneeAdh)===String(annee);
   });
-  // Si aucun résultat avec filtre année → prendre tous (données sans date)
+  // Fallback : si aucun résultat → prendre tous ceux avec droitPaye
   const membresAvecDroitFinal = membresAvecDroit.length > 0
     ? membresAvecDroit
-    : members.filter(m=>m.droitPaye && Number(m.droitMontant));
+    : members.filter(m=>{
+        const dp = m.droitPaye===true || m.droitPaye==='true' || m.droitPaye==='1' || m.droitPaye===1;
+        return dp;
+      });
 
-  const totalDroits = membresAvecDroitFinal.reduce((s,m)=>s+Number(m.droitMontant||0),0);
+  // Calculer le montant droit de chaque membre — utiliser branding si droitMontant absent/0
+  const getDroitMontant = m => {
+    const stored = Number(m.droitMontant||0);
+    return stored > 0 ? stored : montantDroitRef;
+  };
+  const totalDroits = membresAvecDroitFinal.reduce((s,m)=>s+getDroitMontant(m),0);
   bagTableSection('bag-section-adhesion','DROITS D\'ADHÉSION','#1E40AF',
     ['N°','NOM ET PRÉNOM','CODE','DATE D\'ADHÉSION','MONTANT DROIT (FCFA)'],
     membresAvecDroitFinal.map(m=>[
@@ -10028,7 +10070,7 @@ function genererBilanAG(){
       ((m.prenom?m.prenom+' ':'')+m.nom).trim()||'—',
       m.code||'—',
       m.date?new Date(m.date).toLocaleDateString('fr-FR'):'—',
-      `<span style="font-family:var(--mono)">${fmt(Number(m.droitMontant||0))}</span>`
+      `<span style="font-family:var(--mono);font-weight:600">${fmt(getDroitMontant(m))}</span>`
     ]),
     totalDroits);
 
@@ -10102,7 +10144,7 @@ function genererBilanAG(){
     soldePrecedent: _soldePrecedentAG,
     cotisations:    totalCotis,
     cotisationsExc: totalExc,
-    droitsAdhesion: membresAvecDroitFinal.reduce((s,m)=>s+Number(m.droitMontant||0),0),
+    droitsAdhesion: membresAvecDroitFinal.reduce((s,m)=>s+getDroitMontant(m),0),
     dons:           totalDons,
   };
   const totalRecettes = Object.values(recettes).reduce((s,v)=>s+v,0);
@@ -13192,13 +13234,16 @@ function renderRapport(){
     return !isNaN(d) && String(d.getFullYear())===annee;
   }).reduce((s,a)=>s+(Number(a.montant)||0), 0);
 
-  // Droits d'adhésion — filtrés par année d'adhésion (date du membre)
+  // Droits d'adhésion — filtrés par année d'adhésion
+  const _droitRef = Number(branding.droitAdhesion)||0;
+  const _getDroit = m => { const s=Number(m.droitMontant||0); return s>0?s:_droitRef; };
+  const _droitPaye = m => m.droitPaye===true||m.droitPaye==='true'||m.droitPaye==='1'||m.droitPaye===1;
   const membresDroitAnnee = members.filter(m=>{
-    if(!m.droitPaye || !Number(m.droitMontant)) return false;
+    if(!_droitPaye(m)) return false;
     if(!m.date) return false;
     return String(new Date(m.date).getFullYear()) === annee;
   });
-  const totalDroitsAdh = membresDroitAnnee.reduce((s,m)=>s+(Number(m.droitMontant)||0),0);
+  const totalDroitsAdh = membresDroitAnnee.reduce((s,m)=>s+_getDroit(m),0);
 
   // Report exercice précédent (solde clôturé année N-1)
   const reportPrecedent = (() => {
@@ -13229,17 +13274,15 @@ function renderRapport(){
 
   // Droits d'adhésion sur la période
   // Droits d'adhésion sur la période
-  // Pour le rapport ANNUEL → tous les membres ayant adhéré dans l'année (tous mois)
-  // Pour MENSUEL/TRIMESTRIEL → seulement ceux ayant adhéré dans les mois sélectionnés
   const isAnnuel = moisList.length === 12 || moisList.length === ALL_MONTHS.length;
   const membresDroitP = isAnnuel
-    ? membresDroitAnnee  // Annuel → tous les membres de l'année
+    ? membresDroitAnnee
     : membresDroitAnnee.filter(m=>{
         if(!m.date) return false;
         const moisAdh = ALL_MONTHS[new Date(m.date).getMonth()];
         return moisList.includes(moisAdh);
       });
-  const totalDroitsAdhP = membresDroitP.reduce((s,m)=>s+(Number(m.droitMontant)||0),0);
+  const totalDroitsAdhP = membresDroitP.reduce((s,m)=>s+_getDroit(m),0);
   const nbDroitsPayes   = membresDroitP.length;
 
   // Total recettes période
@@ -15676,20 +15719,29 @@ function calculerSoldeAnnee(annee){
   }
 
   const actifs = members.filter(m=>m.actif);
+  const droitRef = Number(branding.droitAdhesion)||0;
 
   // Recettes de l'année
   const cotis    = actifs.reduce((s,m)=>s+getTotalPaid(m,yr),0);
   const cotisExc = excCotisations.filter(exc=>{
     if(!exc.dateCreation) return false;
     return String(new Date(exc.dateCreation).getFullYear())===yr;
-  }).reduce((s,exc)=>s+Object.values(exc.paiements||{}).reduce((a,v)=>a+v,0),0);
-  const droits   = members.filter(m=>m.droitPaye && m.droitMontant &&
-    m.date && String(new Date(m.date).getFullYear())===yr
-  ).reduce((s,m)=>s+(Number(m.droitMontant)||0),0);
-  const donsEsp  = dons.filter(d=>d.type==='especes'&&(d.annee||'2026')===yr).reduce((s,d)=>s+(Number(d.montant)||0),0);
-  const dep      = depenses.filter(d=>(d.annee||'2026')===yr).reduce((s,d)=>s+d.montant,0);
-  const assist   = assistances.filter(a=>{
-    const raw=a.dateVerse||a.dateEvent||'';
+  }).reduce((s,exc)=>s+Object.values(exc.paiements||{}).reduce((a,v)=>a+Number(v),0),0);
+  const droits = members.filter(m=>{
+    const dp = m.droitPaye===true||m.droitPaye==='true'||m.droitPaye==='1'||m.droitPaye===1;
+    return dp && m.date && String(new Date(m.date).getFullYear())===yr;
+  }).reduce((s,m)=>{ const d=Number(m.droitMontant||0); return s+(d>0?d:droitRef); },0);
+  const donsEsp = dons.filter(d=>{
+    if(d.type!=='especes') return false;
+    const a = d.annee||(d.date?d.date.substring(0,4):'');
+    return a===yr;
+  }).reduce((s,d)=>s+(Number(d.montant)||0),0);
+  const dep = depenses.filter(d=>{
+    const a = d.annee||(d.date?d.date.substring(0,4):'');
+    return a===yr;
+  }).reduce((s,d)=>s+Number(d.montant||0),0);
+  const assist = assistances.filter(a=>{
+    const raw=a.dateVerse||a.dateEvent||a.date||'';
     if(!raw) return false;
     const d=new Date(raw);
     return !isNaN(d) && String(d.getFullYear())===yr;
@@ -16220,7 +16272,8 @@ function showReadonlyBanner(){
         const b = JSON.parse(savedBranding);
         // Appliquer le mois de début depuis le branding sauvegardé
         if(b.debutMois !== undefined && b.annee){
-          ANNEE_CONFIG[String(b.annee)] = {debutIdx: parseInt(b.debutMois)};
+          const dv = b.debutMoisManual ? parseInt(b.debutMois) : 0;
+          ANNEE_CONFIG[String(b.annee)] = {debutIdx: dv};
         }
         // Fusionner les autres champs branding
         Object.assign(branding, b);
