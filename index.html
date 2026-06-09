@@ -3221,7 +3221,7 @@ html, body {
           <!-- Sélecteur indicatif pays -->
           <div style="position:relative;flex-shrink:0">
             <div id="tel-flag-btn" onclick="toggleTelDropdown()" style="display:flex;align-items:center;gap:5px;padding:0 10px;height:100%;min-height:40px;border:1.5px solid var(--gray-300);border-radius:var(--radius);cursor:pointer;background:#fff;font-size:13px;white-space:nowrap;user-select:none">
-              <span id="tel-flag-display">🇨🇮</span>
+              <span id="tel-flag-display" style="font-size:11px;font-weight:700;color:var(--navy);background:#E0F2FE;padding:2px 5px;border-radius:4px">CI</span>
               <span id="tel-code-display" style="font-weight:600;color:var(--navy)">+225</span>
               <span style="font-size:10px;color:var(--gray-400)">▼</span>
             </div>
@@ -8262,107 +8262,108 @@ function setDocFilter(cat){
 
 const TEL_COUNTRIES = [
   // ── AFRIQUE DE L'OUEST (priorité) ──
-  {flag:'🇨🇮', name:'Côte d\'Ivoire',      code:'+225'},
-  {flag:'🇸🇳', name:'Sénégal',              code:'+221'},
-  {flag:'🇲🇱', name:'Mali',                 code:'+223'},
-  {flag:'🇧🇫', name:'Burkina Faso',         code:'+226'},
-  {flag:'🇬🇳', name:'Guinée',               code:'+224'},
-  {flag:'🇬🇭', name:'Ghana',                code:'+233'},
-  {flag:'🇳🇬', name:'Nigeria',              code:'+234'},
-  {flag:'🇧🇯', name:'Bénin',               code:'+229'},
-  {flag:'🇹🇬', name:'Togo',                 code:'+228'},
-  {flag:'🇳🇪', name:'Niger',                code:'+227'},
-  {flag:'🇲🇷', name:'Mauritanie',           code:'+222'},
-  {flag:'🇬🇲', name:'Gambie',               code:'+220'},
-  {flag:'🇸🇱', name:'Sierra Leone',         code:'+232'},
-  {flag:'🇱🇷', name:'Liberia',              code:'+231'},
-  {flag:'🇬🇼', name:'Guinée-Bissau',        code:'+245'},
-  {flag:'🇨🇻', name:'Cap-Vert',             code:'+238'},
+  {flag:'🇨🇮', name:'Côte d\'Ivoire',      code:'+225', iso:'CI'},
+  {flag:'🇸🇳', name:'Sénégal',              code:'+221', iso:'SN'},
+  {flag:'🇲🇱', name:'Mali',                 code:'+223', iso:'ML'},
+  {flag:'🇧🇫', name:'Burkina Faso',         code:'+226', iso:'BF'},
+  {flag:'🇬🇳', name:'Guinée',               code:'+224', iso:'GN'},
+  {flag:'🇬🇭', name:'Ghana',                code:'+233', iso:'GH'},
+  {flag:'🇳🇬', name:'Nigeria',              code:'+234', iso:'NG'},
+  {flag:'🇧🇯', name:'Bénin',               code:'+229', iso:'BJ'},
+  {flag:'🇹🇬', name:'Togo',                 code:'+228', iso:'TG'},
+  {flag:'🇳🇪', name:'Niger',                code:'+227', iso:'NE'},
+  {flag:'🇲🇷', name:'Mauritanie',           code:'+222', iso:'MR'},
+  {flag:'🇬🇲', name:'Gambie',               code:'+220', iso:'GM'},
+  {flag:'🇸🇱', name:'Sierra Leone',         code:'+232', iso:'SL'},
+  {flag:'🇱🇷', name:'Liberia',              code:'+231', iso:'LR'},
+  {flag:'🇬🇼', name:'Guinée-Bissau',        code:'+245', iso:'GW'},
+  {flag:'🇨🇻', name:'Cap-Vert',             code:'+238', iso:'CV'},
   // ── AFRIQUE CENTRALE ──
-  {flag:'🇨🇲', name:'Cameroun',             code:'+237'},
-  {flag:'🇬🇦', name:'Gabon',                code:'+241'},
-  {flag:'🇨🇬', name:'Congo',                code:'+242'},
-  {flag:'🇨🇩', name:'RD Congo',             code:'+243'},
-  {flag:'🇨🇫', name:'Centrafrique',         code:'+236'},
-  {flag:'🇹🇩', name:'Tchad',                code:'+235'},
-  {flag:'🇬🇶', name:'Guinée équatoriale',   code:'+240'},
-  {flag:'🇸🇹', name:'São Tomé-et-Príncipe', code:'+239'},
+  {flag:'🇨🇲', name:'Cameroun',             code:'+237', iso:'CM'},
+  {flag:'🇬🇦', name:'Gabon',                code:'+241', iso:'GA'},
+  {flag:'🇨🇬', name:'Congo',                code:'+242', iso:'CG'},
+  {flag:'🇨🇩', name:'RD Congo',             code:'+243', iso:'CD'},
+  {flag:'🇨🇫', name:'Centrafrique',         code:'+236', iso:'CF'},
+  {flag:'🇹🇩', name:'Tchad',                code:'+235', iso:'TD'},
+  {flag:'🇬🇶', name:'Guinée équatoriale',   code:'+240', iso:'GQ'},
+  {flag:'🇸🇹', name:'São Tomé-et-Príncipe', code:'+239', iso:'ST'},
   // ── AFRIQUE DE L'EST ──
-  {flag:'🇰🇪', name:'Kenya',                code:'+254'},
-  {flag:'🇹🇿', name:'Tanzanie',             code:'+255'},
-  {flag:'🇺🇬', name:'Ouganda',              code:'+256'},
-  {flag:'🇷🇼', name:'Rwanda',               code:'+250'},
-  {flag:'🇧🇮', name:'Burundi',              code:'+257'},
-  {flag:'🇪🇹', name:'Éthiopie',             code:'+251'},
-  {flag:'🇸🇴', name:'Somalie',              code:'+252'},
-  {flag:'🇩🇯', name:'Djibouti',             code:'+253'},
-  {flag:'🇪🇷', name:'Érythrée',             code:'+291'},
-  {flag:'🇸🇸', name:'Soudan du Sud',        code:'+211'},
-  {flag:'🇸🇩', name:'Soudan',               code:'+249'},
+  {flag:'🇰🇪', name:'Kenya',                code:'+254', iso:'KE'},
+  {flag:'🇹🇿', name:'Tanzanie',             code:'+255', iso:'TZ'},
+  {flag:'🇺🇬', name:'Ouganda',              code:'+256', iso:'UG'},
+  {flag:'🇷🇼', name:'Rwanda',               code:'+250', iso:'RW'},
+  {flag:'🇧🇮', name:'Burundi',              code:'+257', iso:'BI'},
+  {flag:'🇪🇹', name:'Éthiopie',             code:'+251', iso:'ET'},
+  {flag:'🇸🇴', name:'Somalie',              code:'+252', iso:'SO'},
+  {flag:'🇩🇯', name:'Djibouti',             code:'+253', iso:'DJ'},
+  {flag:'🇪🇷', name:'Érythrée',             code:'+291', iso:'ER'},
+  {flag:'🇸🇸', name:'Soudan du Sud',        code:'+211', iso:'SS'},
+  {flag:'🇸🇩', name:'Soudan',               code:'+249', iso:'SD'},
   // ── AFRIQUE AUSTRALE ──
-  {flag:'🇿🇦', name:'Afrique du Sud',       code:'+27'},
-  {flag:'🇲🇿', name:'Mozambique',           code:'+258'},
-  {flag:'🇿🇲', name:'Zambie',               code:'+260'},
-  {flag:'🇿🇼', name:'Zimbabwe',             code:'+263'},
-  {flag:'🇧🇼', name:'Botswana',             code:'+267'},
-  {flag:'🇳🇦', name:'Namibie',              code:'+264'},
-  {flag:'🇲🇼', name:'Malawi',               code:'+265'},
-  {flag:'🇦🇴', name:'Angola',               code:'+244'},
-  {flag:'🇱🇸', name:'Lesotho',              code:'+266'},
-  {flag:'🇸🇿', name:'Eswatini',             code:'+268'},
+  {flag:'🇿🇦', name:'Afrique du Sud',       code:'+27', iso:'ZA'},
+  {flag:'🇲🇿', name:'Mozambique',           code:'+258', iso:'MZ'},
+  {flag:'🇿🇲', name:'Zambie',               code:'+260', iso:'ZM'},
+  {flag:'🇿🇼', name:'Zimbabwe',             code:'+263', iso:'ZW'},
+  {flag:'🇧🇼', name:'Botswana',             code:'+267', iso:'BW'},
+  {flag:'🇳🇦', name:'Namibie',              code:'+264', iso:'NA'},
+  {flag:'🇲🇼', name:'Malawi',               code:'+265', iso:'MW'},
+  {flag:'🇦🇴', name:'Angola',               code:'+244', iso:'AO'},
+  {flag:'🇱🇸', name:'Lesotho',              code:'+266', iso:'LS'},
+  {flag:'🇸🇿', name:'Eswatini',             code:'+268', iso:'SZ'},
   // ── AFRIQUE DU NORD ──
-  {flag:'🇩🇿', name:'Algérie',              code:'+213'},
-  {flag:'🇲🇦', name:'Maroc',                code:'+212'},
-  {flag:'🇹🇳', name:'Tunisie',              code:'+216'},
-  {flag:'🇱🇾', name:'Libye',                code:'+218'},
-  {flag:'🇪🇬', name:'Égypte',               code:'+20'},
+  {flag:'🇩🇿', name:'Algérie',              code:'+213', iso:'DZ'},
+  {flag:'🇲🇦', name:'Maroc',                code:'+212', iso:'MA'},
+  {flag:'🇹🇳', name:'Tunisie',              code:'+216', iso:'TN'},
+  {flag:'🇱🇾', name:'Libye',                code:'+218', iso:'LY'},
+  {flag:'🇪🇬', name:'Égypte',               code:'+20', iso:'EG'},
   // ── ÎLES AFRICAINES ──
-  {flag:'🇲🇬', name:'Madagascar',           code:'+261'},
-  {flag:'🇲🇺', name:'Maurice',              code:'+230'},
-  {flag:'🇷🇪', name:'La Réunion',           code:'+262'},
-  {flag:'🇸🇨', name:'Seychelles',           code:'+248'},
-  {flag:'🇰🇲', name:'Comores',              code:'+269'},
+  {flag:'🇲🇬', name:'Madagascar',           code:'+261', iso:'MG'},
+  {flag:'🇲🇺', name:'Maurice',              code:'+230', iso:'MU'},
+  {flag:'🇷🇪', name:'La Réunion',           code:'+262', iso:'RE'},
+  {flag:'🇸🇨', name:'Seychelles',           code:'+248', iso:'SC'},
+  {flag:'🇰🇲', name:'Comores',              code:'+269', iso:'KM'},
   // ── EUROPE ──
-  {flag:'🇫🇷', name:'France',               code:'+33'},
-  {flag:'🇧🇪', name:'Belgique',             code:'+32'},
-  {flag:'🇨🇭', name:'Suisse',               code:'+41'},
-  {flag:'🇱🇺', name:'Luxembourg',           code:'+352'},
-  {flag:'🇩🇪', name:'Allemagne',            code:'+49'},
-  {flag:'🇮🇹', name:'Italie',               code:'+39'},
-  {flag:'🇪🇸', name:'Espagne',              code:'+34'},
-  {flag:'🇵🇹', name:'Portugal',             code:'+351'},
-  {flag:'🇬🇧', name:'Royaume-Uni',          code:'+44'},
-  {flag:'🇳🇱', name:'Pays-Bas',             code:'+31'},
-  {flag:'🇸🇪', name:'Suède',                code:'+46'},
-  {flag:'🇳🇴', name:'Norvège',              code:'+47'},
+  {flag:'🇫🇷', name:'France',               code:'+33', iso:'FR'},
+  {flag:'🇧🇪', name:'Belgique',             code:'+32', iso:'BE'},
+  {flag:'🇨🇭', name:'Suisse',               code:'+41', iso:'CH'},
+  {flag:'🇱🇺', name:'Luxembourg',           code:'+352', iso:'LU'},
+  {flag:'🇩🇪', name:'Allemagne',            code:'+49', iso:'DE'},
+  {flag:'🇮🇹', name:'Italie',               code:'+39', iso:'IT'},
+  {flag:'🇪🇸', name:'Espagne',              code:'+34', iso:'ES'},
+  {flag:'🇵🇹', name:'Portugal',             code:'+351', iso:'PT'},
+  {flag:'🇬🇧', name:'Royaume-Uni',          code:'+44', iso:'GB'},
+  {flag:'🇳🇱', name:'Pays-Bas',             code:'+31', iso:'NL'},
+  {flag:'🇸🇪', name:'Suède',                code:'+46', iso:'SE'},
+  {flag:'🇳🇴', name:'Norvège',              code:'+47', iso:'NO'},
   // ── AMÉRIQUES ──
-  {flag:'🇺🇸', name:'États-Unis',           code:'+1'},
-  {flag:'🇨🇦', name:'Canada',               code:'+1'},
-  {flag:'🇧🇷', name:'Brésil',               code:'+55'},
-  {flag:'🇲🇽', name:'Mexique',              code:'+52'},
+  {flag:'🇺🇸', name:'États-Unis',           code:'+1', iso:'US'},
+  {flag:'🇨🇦', name:'Canada',               code:'+1', iso:'US'},
+  {flag:'🇧🇷', name:'Brésil',               code:'+55', iso:'BR'},
+  {flag:'🇲🇽', name:'Mexique',              code:'+52', iso:'MX'},
   // ── MOYEN-ORIENT ──
-  {flag:'🇸🇦', name:'Arabie Saoudite',      code:'+966'},
-  {flag:'🇦🇪', name:'Émirats Arabes Unis',  code:'+971'},
-  {flag:'🇶🇦', name:'Qatar',                code:'+974'},
-  {flag:'🇹🇷', name:'Turquie',              code:'+90'},
+  {flag:'🇸🇦', name:'Arabie Saoudite',      code:'+966', iso:'SA'},
+  {flag:'🇦🇪', name:'Émirats Arabes Unis',  code:'+971', iso:'AE'},
+  {flag:'🇶🇦', name:'Qatar',                code:'+974', iso:'QA'},
+  {flag:'🇹🇷', name:'Turquie',              code:'+90', iso:'TR'},
   // ── ASIE / OCÉANIE ──
-  {flag:'🇨🇳', name:'Chine',                code:'+86'},
-  {flag:'🇮🇳', name:'Inde',                 code:'+91'},
-  {flag:'🇯🇵', name:'Japon',                code:'+81'},
-  {flag:'🇰🇷', name:'Corée du Sud',         code:'+82'},
-  {flag:'🇦🇺', name:'Australie',            code:'+61'},
+  {flag:'🇨🇳', name:'Chine',                code:'+86', iso:'CN'},
+  {flag:'🇮🇳', name:'Inde',                 code:'+91', iso:'IN'},
+  {flag:'🇯🇵', name:'Japon',                code:'+81', iso:'JP'},
+  {flag:'🇰🇷', name:'Corée du Sud',         code:'+82', iso:'KR'},
+  {flag:'🇦🇺', name:'Australie',            code:'+61', iso:'AU'},
 ];
 
 let _telSelectedCode = '+225';
 let _telDropdownOpen = false;
-const _TEL_DEFAULT = '+225|🇨🇮'; // Valeur par défaut Côte d'Ivoire
+const _TEL_DEFAULT_CODE = '+225';
+const _TEL_DEFAULT_FLAG = 'CI •'; // Pas d'emoji pour éviter les erreurs d'encodage
 
 document.addEventListener('DOMContentLoaded', function(){
-  // Afficher CI par défaut immédiatement dans le bouton du modal membre
   const flagEl = document.getElementById('tel-flag-display');
   const codeEl = document.getElementById('tel-code-display');
-  if(flagEl) flagEl.textContent = '🇨🇮';
+  if(flagEl){ flagEl.textContent = 'CI'; flagEl.style.cssText='font-size:11px;font-weight:700;color:var(--navy);background:#E0F2FE;padding:2px 5px;border-radius:4px'; }
   if(codeEl) codeEl.textContent = '+225';
+  _telSelectedCode = '+225';
   initTelDropdown();
 });
 
@@ -8383,7 +8384,7 @@ function initTelDropdown(){
   }
   renderTelCountries(TEL_COUNTRIES, '');
   // Restaurer la valeur sauvegardée (branding > localStorage > CI par défaut)
-  const savedRaw = branding.telIndicatifDefaut || lsGet('_tel_indicatif_defaut') || _TEL_DEFAULT;
+  const savedRaw = branding.telIndicatifDefaut || lsGet('_tel_indicatif_defaut') || (_TEL_DEFAULT_CODE+'|'+_TEL_DEFAULT_FLAG);
   _applyTelBrandSel(savedRaw);
   applyDefaultTelIndicatif();
   // Fermer dropdown si clic ailleurs
@@ -8405,7 +8406,7 @@ function _applyTelBrandSel(raw){
   }
   if(!found){
     // Valeur personnalisée non dans la liste → sélectionner CI par défaut
-    brandSel.value = _TEL_DEFAULT;
+    brandSel.value = _TEL_DEFAULT_CODE+'|'+_TEL_DEFAULT_FLAG;
   }
   // Mettre à jour l'aperçu
   const parts = (brandSel.value||_TEL_DEFAULT).split('|');
@@ -8434,7 +8435,7 @@ function onBrandIndicatifChange(){
     return;
   }
   if(!val || val===_TEL_DEFAULT){
-    branding.telIndicatifDefaut = _TEL_DEFAULT;
+    branding.telIndicatifDefaut = _TEL_DEFAULT_CODE+'|'+_TEL_DEFAULT_FLAG;
     lsSet('_tel_indicatif_defaut', _TEL_DEFAULT);
   } else {
     branding.telIndicatifDefaut = val;
@@ -8448,15 +8449,19 @@ function onBrandIndicatifChange(){
 }
 
 function applyDefaultTelIndicatif(){
-  // Lire branding > localStorage > CI défaut — mettre à jour bouton modal membre
-  const raw   = branding.telIndicatifDefaut || lsGet('_tel_indicatif_defaut') || _TEL_DEFAULT;
+  const raw   = branding.telIndicatifDefaut || lsGet('_tel_indicatif_defaut') || ('+225|CI');
   const parts = raw.split('|');
   const code  = parts[0]||'+225';
-  const flag  = parts[1]||'🇨🇮';
+  // Trouver iso depuis TEL_COUNTRIES
+  const country = TEL_COUNTRIES.find(c=>c.code===code);
+  const iso = country ? country.iso : (parts[1]||'??').replace(/[^A-Z]/g,'').substring(0,2)||'CI';
   _telSelectedCode = code;
   const flagEl = document.getElementById('tel-flag-display');
   const codeEl = document.getElementById('tel-code-display');
-  if(flagEl) flagEl.textContent = flag;
+  if(flagEl){
+    flagEl.textContent = iso;
+    flagEl.style.cssText='font-size:11px;font-weight:700;color:var(--navy);background:#E0F2FE;padding:2px 5px;border-radius:4px';
+  }
   if(codeEl) codeEl.textContent = code;
 }
 
@@ -8561,7 +8566,13 @@ function selectTelCountry(code, flag){
   _telSelectedCode = code;
   const flagEl = document.getElementById('tel-flag-display');
   const codeEl = document.getElementById('tel-code-display');
-  if(flagEl) flagEl.textContent = flag;
+  // Trouver le nom ISO 2 lettres depuis TEL_COUNTRIES
+  const country = TEL_COUNTRIES.find(c=>c.code===code);
+  const isoLabel = country ? country.iso : (flag||'').replace(/[^A-Z]/g,'').substring(0,2) || '??';
+  if(flagEl){
+    flagEl.textContent = isoLabel;
+    flagEl.style.cssText='font-size:11px;font-weight:700;color:var(--navy);background:#E0F2FE;padding:2px 5px;border-radius:4px';
+  }
   if(codeEl) codeEl.textContent = code;
   closeTelDropdown();
   onTelInput();
