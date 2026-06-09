@@ -4219,7 +4219,12 @@ async function loadFromSheets(){
     Object.assign(branding, data.branding);
     // Restaurer la config du mois de début pour l'année configurée
     if(branding.debutMois !== undefined && branding.annee){
-      ANNEE_CONFIG[String(branding.annee)] = {debutIdx: parseInt(branding.debutMois)};
+      // Corriger l'ancienne valeur erronée (2=Mars était le défaut HTML)
+      // Si = 2 et que l'admin n'a pas explicitement défini Mars, forcer à 0 (Janvier)
+      let debutVal = parseInt(branding.debutMois);
+      if(debutVal === 2 && !branding.debutMoisManual) debutVal = 0;
+      branding.debutMois = debutVal;
+      ANNEE_CONFIG[String(branding.annee)] = {debutIdx: debutVal};
     }
     // Restaurer les années sauvegardées manuellement (fusionner sans écraser)
     if(branding.annees){
@@ -9239,7 +9244,7 @@ function savePret(){
   errEl.style.display='none';
   if(!memberCode){showErr('Sélectionnez un membre bénéficiaire.');return;}
   if(!montant||montant<=0){showErr('Le montant doit être supérieur à 0.');return;}
-  if(!validateCompte('pay-compte','destinataire ')) return;
+  if(!validateCompte('pret-compte','source (à débiter) ')) return;
   if(taux<0||taux>100){showErr('Le taux doit être compris entre 0% et 100%.');return;}
   if(!duree||duree<1){showErr('La durée doit être d\'au moins 1 échéance.');return;}
   if(!date){showErr('La date de déblocage est obligatoire.');return;}
@@ -9259,7 +9264,6 @@ function savePret(){
   if(idx>=0) prets[idx]=record; else prets.push(record);
   dbPost('savePret',record);
   // Transaction compte — sortie si nouveau prêt (pas modification)
-  if(!validateCompte('pret-compte','source (à débiter) ')) return;
   const pretCptEl = document.getElementById('pret-compte');
   const pretCpt   = pretCptEl?.value || pretCptEl?.selectedOptions?.[0]?.value || '';
   if(pretCpt && !_pretEditId){
@@ -11003,14 +11007,16 @@ function validateCompte(selectId, labelModule){
 }
 
 function updateComptesSelects(){
+  const actifs = comptes.filter(c=>c.actif && c.id);
   const selects = document.querySelectorAll('.select-compte');
-  const opts = '<option value="">— Sélectionner un compte —</option>'
-    + comptes.filter(c=>c.actif && c.id).map(c=>`<option value="${c.id}">${c.nom} (${COMPTE_TYPE_LABELS[c.type]||c.type})</option>`).join('');
   selects.forEach(s=>{
-    const prev = s.value; // mémoriser la sélection actuelle
-    s.innerHTML = opts;
-    // Restaurer la sélection précédente si elle existe encore
-    if(prev) s.value = prev;
+    const prevVal = s.value; // mémoriser la sélection actuelle
+    s.innerHTML = '<option value="">— Sélectionner un compte —</option>'
+      + actifs.map(c=>`<option value="${c.id}">${c.nom} (${COMPTE_TYPE_LABELS[c.type]||c.type})</option>`).join('');
+    // Restaurer la sélection si elle est toujours valide
+    if(prevVal && actifs.find(c=>c.id===prevVal)){
+      s.value = prevVal;
+    }
   });
   // Filtre historique
   const filtreEl = document.getElementById('comptes-filtre-compte');
@@ -13751,6 +13757,7 @@ function applyStartMonthConfig(){
   // Mettre à jour ANNEE_CONFIG pour l'année concernée
   ANNEE_CONFIG[String(annee)] = {debutIdx: debut};
   branding.debutMois = debut;
+  branding.debutMoisManual = true; // L'admin a explicitement défini ce mois
   branding.annee     = annee;
   const lbl = document.getElementById('brand-annee-label');
   if(lbl) lbl.textContent = annee;
