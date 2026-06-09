@@ -2241,8 +2241,8 @@ html, body {
                 <div class="field">
                   <label>Mois de début — <span id="brand-annee-label">2026</span></label>
                   <select id="brand-mois-debut" onchange="applyStartMonthConfig()">
-                    <option value="0">Janvier</option><option value="1">Février</option>
-                    <option value="2" selected>Mars</option><option value="3">Avril</option>
+                    <option value="0" selected>Janvier</option><option value="1">Février</option>
+                    <option value="2">Mars</option><option value="3">Avril</option>
                     <option value="4">Mai</option><option value="5">Juin</option>
                     <option value="6">Juillet</option><option value="7">Août</option>
                     <option value="8">Septembre</option><option value="9">Octobre</option>
@@ -3436,7 +3436,9 @@ const MONTH_IDX_ALL = Object.fromEntries(ALL_MONTHS.map((m,i)=>[m,i]));
 // Pour 2026, les adhésions ont commencé en Mars (index 2)
 // Pour 2027 et suivantes, l'année commence en Janvier (index 0)
 const ANNEE_CONFIG = {
-  '2026': { debutIdx: 0 },  // sera mis à jour depuis branding.debutMois
+  '2024': { debutIdx: 0 },
+  '2025': { debutIdx: 0 },
+  '2026': { debutIdx: 0 },
   '2027': { debutIdx: 0 },
   '2028': { debutIdx: 0 },
   '2029': { debutIdx: 0 },
@@ -3488,7 +3490,7 @@ const ALL_ADMIN_MODULES = [
    CONFIGURATION GOOGLE SHEETS
    Collez ici l'URL de votre déploiement Apps Script
 ══════════════════════════════════════════ */
-let GAS_URL = "https://script.google.com/macros/s/AKfycbxcAqkgfnsTdV_WgY8xthFS5bAuDAXLln7LsytmjADYhLAzwcC1UnkB9XFFnvBmDkn6vg/exec"; // ← URL mise à jour
+let GAS_URL = "https://script.google.com/macros/s/AKfycbyz7CqB4R9uNu4mB1hxSKFdHt0X4AN2JvyCQyY_mIqjfH1JGHIACHUny_XsyA9wVG0xXw/exec"; // ← URL mise à jour
 
 // ─ Test de connectivité GAS
 async function testGasConnexion(){
@@ -9258,7 +9260,8 @@ function savePret(){
   dbPost('savePret',record);
   // Transaction compte — sortie si nouveau prêt (pas modification)
   if(!validateCompte('pret-compte','source (à débiter) ')) return;
-  const pretCpt = document.getElementById('pret-compte')?.value;
+  const pretCptEl = document.getElementById('pret-compte');
+  const pretCpt   = pretCptEl?.value || pretCptEl?.selectedOptions?.[0]?.value || '';
   if(pretCpt && !_pretEditId){
     enregistrerTransaction({compteId:pretCpt, type:'sortie', montant:record.montant,
       libelle:'Prêt octroyé — '+(record.memberNom||record.memberCode)+' — '+(record.objet||''),
@@ -10983,13 +10986,13 @@ function renderComptes(){
 // Retourne true si valide, false + affiche erreur si vide
 function validateCompte(selectId, labelModule){
   const sel = document.getElementById(selectId);
-  if(!sel) return true; // champ absent → pas de validation
-  if(!sel.value || sel.value === ''){
+  if(!sel) return true;
+  // Valide si : valeur non vide ET selectedIndex > 0 (pas la 1ère option vide)
+  const hasValue = sel.value && sel.value !== '' && sel.selectedIndex > 0;
+  if(!hasValue){
     sel.style.borderColor = '#DC2626';
     sel.style.boxShadow   = '0 0 0 2px rgba(220,38,38,0.2)';
-    // Toast d'erreur
     _showDocToast('⚠️ Compte '+(labelModule||'')+'obligatoire — sélectionnez un compte avant d\'enregistrer');
-    // Remettre la bordure normale après 3s
     setTimeout(()=>{ sel.style.borderColor=''; sel.style.boxShadow=''; }, 3000);
     sel.focus();
     return false;
@@ -11002,8 +11005,13 @@ function validateCompte(selectId, labelModule){
 function updateComptesSelects(){
   const selects = document.querySelectorAll('.select-compte');
   const opts = '<option value="">— Sélectionner un compte —</option>'
-    + comptes.filter(c=>c.actif).map(c=>`<option value="${c.id}">${c.nom} (${COMPTE_TYPE_LABELS[c.type]||c.type})</option>`).join('');
-  selects.forEach(s=>{ s.innerHTML = opts; });
+    + comptes.filter(c=>c.actif && c.id).map(c=>`<option value="${c.id}">${c.nom} (${COMPTE_TYPE_LABELS[c.type]||c.type})</option>`).join('');
+  selects.forEach(s=>{
+    const prev = s.value; // mémoriser la sélection actuelle
+    s.innerHTML = opts;
+    // Restaurer la sélection précédente si elle existe encore
+    if(prev) s.value = prev;
+  });
   // Filtre historique
   const filtreEl = document.getElementById('comptes-filtre-compte');
   if(filtreEl){
@@ -13214,11 +13222,17 @@ function renderRapport(){
   }).reduce((s,d)=>s+(Number(d.montant)||0),0);
 
   // Droits d'adhésion sur la période
-  const membresDroitP = membresDroitAnnee.filter(m=>{
-    if(!m.date) return false;
-    const moisAdh = ALL_MONTHS[new Date(m.date).getMonth()];
-    return moisList.includes(moisAdh);
-  });
+  // Droits d'adhésion sur la période
+  // Pour le rapport ANNUEL → tous les membres ayant adhéré dans l'année (tous mois)
+  // Pour MENSUEL/TRIMESTRIEL → seulement ceux ayant adhéré dans les mois sélectionnés
+  const isAnnuel = moisList.length === 12 || moisList.length === ALL_MONTHS.length;
+  const membresDroitP = isAnnuel
+    ? membresDroitAnnee  // Annuel → tous les membres de l'année
+    : membresDroitAnnee.filter(m=>{
+        if(!m.date) return false;
+        const moisAdh = ALL_MONTHS[new Date(m.date).getMonth()];
+        return moisList.includes(moisAdh);
+      });
   const totalDroitsAdhP = membresDroitP.reduce((s,m)=>s+(Number(m.droitMontant)||0),0);
   const nbDroitsPayes   = membresDroitP.length;
 
