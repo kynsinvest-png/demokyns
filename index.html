@@ -10035,29 +10035,43 @@ function genererBilanAG(){
   // ─────────────────────────────────────
   // 3b. DROITS D'ADHÉSION
   // ─────────────────────────────────────
-  const montantDroitRef = Number(branding.droitAdhesion)||0; // montant de référence configuré
-  const membresAvecDroit = members.filter(m=>{
-    // Normaliser droitPaye — peut être string "true"/"false" depuis Sheets
-    const dp = m.droitPaye===true || m.droitPaye==='true' || m.droitPaye==='1' || m.droitPaye===1;
-    if(!dp) return false;
-    // Filtrer par date d'adhésion selon la période
-    if(dateDebutStr && dateFinStr){
-      const dateAdh = m.date||'';
-      return dateAdh>=dateDebutStr && dateAdh<=dateFinStr;
-    }
-    if(!m.date) return true;
-    const anneeAdh = m.date.substring(0,4);
-    return String(anneeAdh)===String(annee);
-  });
-  // Fallback : si aucun résultat → prendre tous ceux avec droitPaye
-  const membresAvecDroitFinal = membresAvecDroit.length > 0
-    ? membresAvecDroit
-    : members.filter(m=>{
-        const dp = m.droitPaye===true || m.droitPaye==='true' || m.droitPaye==='1' || m.droitPaye===1;
-        return dp;
-      });
+  const montantDroitRef = Number(branding.droitAdhesion)||0;
 
-  // Calculer le montant droit de chaque membre — utiliser branding si droitMontant absent/0
+  // Normaliser une date membre (format ISO "2026-01-01" ou FR "01/01/2026" ou "01/12/2025")
+  const parseDateMembre = (dateStr) => {
+    if(!dateStr) return null;
+    // Format ISO : YYYY-MM-DD
+    if(/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return new Date(dateStr);
+    // Format FR : DD/MM/YYYY
+    if(/^\d{2}\/\d{2}\/\d{4}/.test(dateStr)){
+      const [d,m,y] = dateStr.split('/');
+      return new Date(y+'-'+m+'-'+d);
+    }
+    return new Date(dateStr);
+  };
+  const getAnneeAdh = (m) => {
+    const d = parseDateMembre(m.date);
+    return d && !isNaN(d) ? String(d.getFullYear()) : '';
+  };
+
+  const membresAvecDroit = members.filter(m=>{
+    const dp = m.droitPaye===true||m.droitPaye==='true'||m.droitPaye==='1'||m.droitPaye===1;
+    if(!dp) return false;
+    if(dateDebutStr && dateFinStr){
+      const d = parseDateMembre(m.date);
+      if(!d || isNaN(d)) return false;
+      const iso = d.toISOString().split('T')[0];
+      return iso>=dateDebutStr && iso<=dateFinStr;
+    }
+    const anneeAdh = getAnneeAdh(m);
+    if(!anneeAdh) return false; // Exclure si pas de date (on ne sait pas l'année)
+    return anneeAdh === String(annee);
+  });
+
+  // PAS de fallback sur tous les membres — si aucun dans l'année, afficher vide
+  const membresAvecDroitFinal = membresAvecDroit;
+
+  // Montant : utiliser droitMontant stocké, sinon branding.droitAdhesion
   const getDroitMontant = m => {
     const stored = Number(m.droitMontant||0);
     return stored > 0 ? stored : montantDroitRef;
@@ -10069,7 +10083,7 @@ function genererBilanAG(){
       m.num||'—',
       ((m.prenom?m.prenom+' ':'')+m.nom).trim()||'—',
       m.code||'—',
-      m.date?new Date(m.date).toLocaleDateString('fr-FR'):'—',
+      (()=>{ const d=parseDateMembre(m.date); return d&&!isNaN(d)?d.toLocaleDateString('fr-FR'):'—'; })(),
       `<span style="font-family:var(--mono);font-weight:600">${fmt(getDroitMontant(m))}</span>`
     ]),
     totalDroits);
@@ -10140,11 +10154,19 @@ function genererBilanAG(){
   // Solde Comptes & Trésorerie — pour la vérification de cohérence uniquement (hors recettes)
   const _soldeTresorerie = comptes.filter(cp=>cp.actif).reduce((s,cp)=>s+getCompteSolde(cp.id),0);
 
+  // Recharger le montant droit depuis le DOM si branding pas encore chargé
+  const droitAdhesionRef = Number(branding.droitAdhesion) ||
+    Number(document.getElementById('brand-droit-adhesion')?.value) || 0;
+  const _getDroitFinal = m => {
+    const s = Number(m.droitMontant||0);
+    return s > 0 ? s : droitAdhesionRef;
+  };
+
   const recettes = {
     soldePrecedent: _soldePrecedentAG,
     cotisations:    totalCotis,
     cotisationsExc: totalExc,
-    droitsAdhesion: membresAvecDroitFinal.reduce((s,m)=>s+getDroitMontant(m),0),
+    droitsAdhesion: membresAvecDroitFinal.reduce((s,m)=>s+_getDroitFinal(m),0),
     dons:           totalDons,
   };
   const totalRecettes = Object.values(recettes).reduce((s,v)=>s+v,0);
