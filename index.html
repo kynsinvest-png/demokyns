@@ -13003,17 +13003,36 @@ function renderDepenses(){
   const search   = (document.getElementById('dep-search')?.value||'').toLowerCase();
   const moisFil  = document.getElementById('dep-month-filter')?.value||'';
 
-  const totalMont     = depenses.reduce((s,d)=>s+d.montant,0);
-  const totalAct      = depenses.filter(d=>d.type==='activite').reduce((s,d)=>s+d.montant,0);
-  const totalFonct    = depenses.filter(d=>d.type==='fonctionnement').reduce((s,d)=>s+d.montant,0);
-  const totalAutres   = depenses.filter(d=>d.type==='autres').reduce((s,d)=>s+d.montant,0);
-  const totalCotis    = members.filter(m=>m.actif).reduce((s,m)=>s+getTotalPaid(m),0);
-  const totalCotisExc = excCotisations.reduce((s,exc)=>s+Object.values(exc.paiements||{}).reduce((a,v)=>a+v,0),0);
-  const totalDroits   = members.filter(m=>m.droitPaye).reduce((s,m)=>s+(m.droitMontant||0),0);
-  const totalDonsEsp  = dons.filter(d=>d.type==='especes').reduce((s,d)=>s+(Number(d.montant)||0),0);
-  const totalAssistD  = assistances.reduce((s,a)=>s+(Number(a.montant)||0),0);
-  const _soldePrecedent = calculerSoldeAnnee(String(parseInt(_anneeActive||'2026')-1)) > 0
-    ? calculerSoldeAnnee(String(parseInt(_anneeActive||'2026')-1)) : (Number(branding.soldePrecedent)||0);
+  const totalMont     = depenses.reduce((s,d)=>s+Number(d.montant||0),0);
+  const totalAct      = depenses.filter(d=>d.type==='activite').reduce((s,d)=>s+Number(d.montant||0),0);
+  const totalFonct    = depenses.filter(d=>d.type==='fonctionnement').reduce((s,d)=>s+Number(d.montant||0),0);
+  const totalAutres   = depenses.filter(d=>d.type==='autres').reduce((s,d)=>s+Number(d.montant||0),0);
+  // Filtrer par année active
+  const yr = String(_anneeActive||new Date().getFullYear());
+  const totalCotis    = members.filter(m=>m.actif).reduce((s,m)=>s+getTotalPaid(m,yr),0);
+  const totalCotisExc = excCotisations
+    .filter(exc=>{ const d=exc.dateCreation?new Date(exc.dateCreation):null; return d&&String(d.getFullYear())===yr; })
+    .reduce((s,exc)=>s+Object.values(exc.paiements||{}).reduce((a,v)=>a+Number(v||0),0),0);
+  const droitRef      = Number(branding.droitAdhesion)||0;
+  const totalDroits   = members.filter(m=>{
+    const dp=m.droitPaye===true||m.droitPaye==='true'||m.droitPaye==='1';
+    if(!dp) return false;
+    const d=m.date?new Date(m.date):null;
+    return d&&String(d.getFullYear())===yr;
+  }).reduce((s,m)=>{ const dm=Number(m.droitMontant||0); return s+(dm>0?dm:droitRef); },0);
+  const totalDonsEsp  = dons.filter(d=>{
+    if(d.type!=='especes') return false;
+    const a=d.annee||(d.date?d.date.substring(0,4):'');
+    return a===yr;
+  }).reduce((s,d)=>s+(Number(d.montant)||0),0);
+  const totalAssistD  = assistances.filter(a=>{
+    const raw=a.dateVerse||a.dateEvent||a.date||'';
+    if(!raw) return false;
+    const d=new Date(raw);
+    return !isNaN(d)&&String(d.getFullYear())===yr;
+  }).reduce((s,a)=>s+(Number(a.montant)||0),0);
+  const _soldePrecedent = calculerSoldeAnnee(String(parseInt(yr)-1))>0
+    ? calculerSoldeAnnee(String(parseInt(yr)-1)) : (Number(branding.soldePrecedent)||0);
   const solde = totalCotis + totalCotisExc + totalDroits + totalDonsEsp - totalMont - totalAssistD + _soldePrecedent;
 
   statsEl.innerHTML=`
