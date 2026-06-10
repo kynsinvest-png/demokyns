@@ -11913,7 +11913,7 @@ function saveConfigModules(){
     if(el) modulesConfig['member_'+m.id] = el.checked;
   });
   lsSet('mc_modules_config', JSON.stringify(modulesConfig));
-  dbPost('saveModulesConfig',{modulesConfig});
+  dbPost('saveModulesConfig', {modulesConfig, source: 'client'});
   // Appliquer et reconstruire
   applyModulesConfig();
   buildSidebar(currentRole||'admin');
