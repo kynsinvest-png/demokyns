@@ -828,6 +828,26 @@ html, body {
     </div>
 
     <!-- Pied de la carte login -->
+
+    <!-- BOUTON RENOUVELER LICENCE (affiché si branding.urlPaiement est configuré) -->
+    <div id="btn-renouveler-wrap" style="display:none;margin-top:16px">
+      <div style="border-top:1px solid var(--gray-200);padding-top:14px">
+        <div style="font-size:11px;color:#6B7280;text-align:center;margin-bottom:8px">
+          🔒 Licence expirée ou souhaitez-vous renouveler ?
+        </div>
+        <button onclick="ouvrirPaiement()"
+          style="width:100%;padding:13px;background:linear-gradient(135deg,#16A34A,#15803D);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:.2px">
+          <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:#fff;fill:none;stroke-width:2.5">
+            <rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>
+          </svg>
+          Acheter / Renouveler ma licence
+        </button>
+        <div style="font-size:10px;color:#9CA3AF;text-align:center;margin-top:6px">
+          Paiement sécurisé · Wave · Orange Money · MTN · Moov
+        </div>
+      </div>
+    </div>
+
     <div style="border-top:1px solid var(--gray-200);margin-top:20px;padding-top:14px;display:flex;align-items:center;justify-content:space-between">
       <div style="font-size:11px;color:var(--gray-400);line-height:1.5">
         <div style="font-weight:600;color:var(--gray-500)">KynsDev</div>
@@ -2253,6 +2273,14 @@ html, body {
                 <div class="field">
                   <label>Lien du site (Google Sites)</label>
                   <input type="text" id="brand-url" placeholder="Ex: sites.google.com/view/masite"/>
+                </div>
+                <div class="field field-full">
+                  <label>💳 Lien de paiement / renouvellement licence</label>
+                  <input type="url" id="brand-url-paiement"
+                    placeholder="https://votre-login.github.io/kynsdev_paiement.html"/>
+                  <span style="font-size:11px;color:var(--gray-500);margin-top:3px;display:block">
+                    URL de la page de paiement KynsDev. Si renseigné, un bouton "Acheter / Renouveler ma licence" s'affiche sur la page de connexion.
+                  </span>
                 </div>
                 <div class="field field-full">
                   <label>📢 Message de la bannière (espace membre)</label>
@@ -11083,6 +11111,30 @@ function validateCompte(selectId, labelModule){
   return true;
 }
 
+// ── BOUTON PAIEMENT LICENCE ─────────────────────────────────────
+function ouvrirPaiement(){
+  const url = branding.urlPaiement || '';
+  if(!url || url.includes('VOTRE_URL')){
+    // Fallback → page paiement KynsDev directe
+    window.open('https://wa.me/2250713435873?text=Bonjour+KynsDev+je+souhaite+renouveler+ma+licence+pour+'+encodeURIComponent(branding.nom||'mon association'), '_blank');
+    return;
+  }
+  window.open(url, '_blank');
+}
+
+function _initBoutonPaiement(){
+  const wrap = document.getElementById('btn-renouveler-wrap');
+  if(!wrap) return;
+  // Afficher le bouton si une URL de paiement est configurée
+  // OU si la licence est expirée / absente
+  const urlOk    = branding.urlPaiement && !branding.urlPaiement.includes('VOTRE_URL');
+  const licExpire = branding.licenceExpiration &&
+    new Date(branding.licenceExpiration) < new Date();
+  if(urlOk || licExpire){
+    wrap.style.display = 'block';
+  }
+}
+
 function updateComptesSelects(){
   const actifs = comptes.filter(c=>c.actif && c.id);
   const selects = document.querySelectorAll('.select-compte');
@@ -13935,6 +13987,10 @@ function initBrandingPage(){
     document.getElementById('brand-solde-precedent').value = branding.soldePrecedent||0;
   if(document.getElementById('brand-regle-cotisation'))
     document.getElementById('brand-regle-cotisation').value = branding.regleCotisation||'mois_adhesion';
+  if(document.getElementById('brand-url-paiement'))
+    document.getElementById('brand-url-paiement').value = branding.urlPaiement||'';
+  // Bouton paiement sur la page login
+  _initBoutonPaiement();
   // telIndicatifDefaut : appliqué après initTelDropdown (les options sont peuplées à ce moment)
   // On sauvegarde dans localStorage pour que initTelDropdown le retrouve
   if(branding.telIndicatifDefaut){
@@ -14127,6 +14183,7 @@ function saveBranding(){
   branding.hsmsClientSecret = document.getElementById('brand-hsms-secret')?.value.trim()||'';
   branding.debutMois= parseInt(document.getElementById('brand-mois-debut')?.value||'2');
   branding.regleCotisation = document.getElementById('brand-regle-cotisation')?.value || 'mois_adhesion';
+  branding.urlPaiement     = document.getElementById('brand-url-paiement')?.value.trim() || '';
   const brandTelSel = document.getElementById('brand-tel-indicatif');
   if(brandTelSel && brandTelSel.value && brandTelSel.value !== 'custom'){
     branding.telIndicatifDefaut = brandTelSel.value; // format "code|flag"
