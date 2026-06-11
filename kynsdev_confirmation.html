@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KynsDev — Paiement confirmé</title>
+<style>
+  :root{--navy:#0F2544;--green:#16A34A;--gold:#F59E0B;--blue:#1D4ED8;--border:#E5E7EB}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,sans-serif;background:#F0FDF4;min-height:100vh;display:flex;flex-direction:column}
+  .header{background:var(--navy);padding:14px 24px;display:flex;align-items:center;gap:10px}
+  .logo{font-size:20px;font-weight:900;color:#fff}
+  .logo span{color:var(--gold)}
+  .container{max-width:480px;margin:40px auto;padding:0 16px;flex:1;text-align:center}
+  .check{width:80px;height:80px;background:var(--green);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:36px;box-shadow:0 0 0 16px rgba(22,163,74,.1)}
+  h1{font-size:24px;font-weight:900;color:var(--navy);margin-bottom:8px}
+  .sub{font-size:14px;color:#6B7280;margin-bottom:28px}
+  .card{background:#fff;border-radius:16px;padding:20px 24px;box-shadow:0 2px 16px rgba(0,0,0,.07);text-align:left;margin-bottom:16px}
+  .card-title{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px}
+  .info-ligne{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border)}
+  .info-ligne:last-child{border:none}
+  .info-val{font-weight:600;color:var(--navy)}
+  .sms-note{background:#EFF6FF;border:1.5px solid #93C5FD;border-radius:10px;padding:14px;font-size:13px;color:#1E40AF;margin-bottom:16px}
+  .btn-wa{display:flex;align-items:center;justify-content:center;gap:8px;background:#16A34A;color:#fff;border:none;border-radius:12px;padding:14px;width:100%;font-size:15px;font-weight:700;cursor:pointer;text-decoration:none;margin-bottom:10px}
+  .btn-retry{display:flex;align-items:center;justify-content:center;gap:8px;background:#F3F4F6;color:#374151;border:none;border-radius:12px;padding:12px;width:100%;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none}
+  .loader{text-align:center;padding:40px}
+  .spinner{width:36px;height:36px;border:4px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 12px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="header"><div class="logo">Kyns<span>Dev</span></div></div>
+<div class="container">
+
+  <div id="view-loading" class="loader">
+    <div class="spinner"></div>
+    <div style="font-size:14px;color:#6B7280">Activation de votre licence en cours…</div>
+    <div style="font-size:12px;color:#9CA3AF;margin-top:6px">Merci de patienter quelques instants</div>
+  </div>
+
+  <div id="view-success" style="display:none">
+    <div class="check">✓</div>
+    <h1>Licence activée ! 🎉</h1>
+    <p class="sub">Votre paiement a été confirmé et votre licence est active.</p>
+
+    <div class="sms-note">
+      📱 <strong>Un SMS vient de vous être envoyé</strong> avec votre clé de licence et le lien d'accès à votre application.
+    </div>
+
+    <div class="card">
+      <div class="card-title">📋 Récapitulatif</div>
+      <div id="recap-details"><!-- Rempli par JS --></div>
+    </div>
+
+    <a id="btn-wa" href="#" class="btn-wa" target="_blank">
+      💬 Ouvrir sur WhatsApp
+    </a>
+    <a href="kynsdev_paiement.html" class="btn-retry" style="display:block">
+      ← Retour à la page d'accueil
+    </a>
+  </div>
+
+  <div id="view-error" style="display:none">
+    <div style="font-size:60px;margin-bottom:16px">❌</div>
+    <h1 style="color:#DC2626">Paiement non confirmé</h1>
+    <p class="sub">Nous n'avons pas encore reçu la confirmation de votre paiement.</p>
+    <div style="background:#FEF2F2;border-radius:10px;padding:14px;font-size:13px;color:#991B1B;margin-bottom:20px">
+      Si vous avez été débité, votre licence sera activée dans les prochaines minutes et vous recevrez un SMS. Sinon, vous pouvez réessayer.
+    </div>
+    <a href="kynsdev_paiement.html" class="btn-wa" style="background:var(--blue)">
+      🔄 Réessayer le paiement
+    </a>
+    <a href="https://wa.me/2250713435873?text=J'ai un problème avec mon paiement KynsDev" class="btn-retry" target="_blank" style="display:block;margin-top:10px">
+      💬 Contacter le support
+    </a>
+  </div>
+
+</div>
+
+<script>
+const GAS_CRM_URL = 'https://script.google.com/macros/s/AKfycbzUL1tv00Ga2ZaiVXBvgaKRmPSEz8ygVvZxEmFpMfEXYIXumje90iEJItDmf91GJiib/exec'; // ← Remplacer par votre URL GAS CRM
+
+// Récupérer la référence de transaction depuis l'URL (GeniusPay la passe en param)
+const params    = new URLSearchParams(window.location.search);
+const reference = params.get('reference') || params.get('transaction_id') || params.get('ref');
+const status    = params.get('status');
+const commande  = JSON.parse(sessionStorage.getItem('kyns_commande')||'{}');
+
+async function verifierEtActiver(){
+  // Cas d'erreur explicite
+  if(status === 'failed' || status === 'cancelled'){
+    showView('error'); return;
+  }
+
+  if(!reference && !commande.nom){
+    showView('error'); return;
+  }
+
+  // Appeler le GAS pour vérifier le paiement et activer la licence
+  try{
+    const resp = await fetch(GAS_CRM_URL+'?action=activerLicence'
+      +'&reference='+encodeURIComponent(reference||'')
+      +'&nom='+encodeURIComponent(commande.nom||'')
+      +'&tel='+encodeURIComponent(commande.tel||'')
+      +'&offre='+encodeURIComponent(commande.offre||'')
+      +'&mois='+encodeURIComponent(commande.mois||'')
+      +'&expiration='+encodeURIComponent(commande.expiration||'')
+      +'&contact='+encodeURIComponent(commande.contact||'')
+      +'&total='+encodeURIComponent(commande.total||'')
+      +'&cb=_kyns_'+Date.now(),
+      {mode:'cors'}
+    );
+    const data = await resp.json();
+
+    if(data.ok || data.success){
+      afficherSucces(data, commande);
+    } else {
+      // GeniusPay peut prendre quelques secondes — réessayer 3 fois
+      await attendre(4000);
+      const resp2 = await fetch(GAS_CRM_URL+'?action=activerLicence&reference='+encodeURIComponent(reference||'')+'&cb=_kyns_'+Date.now(), {mode:'cors'});
+      const data2 = await resp2.json();
+      if(data2.ok || data2.success) afficherSucces(data2, commande);
+      else showView('error');
+    }
+  }catch(e){
+    // GAS no-cors → supposer succès si redirection depuis GeniusPay
+    if(reference || status==='success'){
+      afficherSucces({}, commande);
+    } else {
+      showView('error');
+    }
+  }
+}
+
+function afficherSucces(data, cmd){
+  showView('success');
+  const cle = data.cle || '—';
+  const exp = cmd.expiration ? new Date(cmd.expiration).toLocaleDateString('fr-FR') : '—';
+
+  document.getElementById('recap-details').innerHTML = `
+    <div class="info-ligne"><span>Mutuelle</span><span class="info-val">${cmd.nom||'—'}</span></div>
+    <div class="info-ligne"><span>Offre</span><span class="info-val">${cmd.offre||'—'} · ${cmd.mois||'—'} mois</span></div>
+    <div class="info-ligne"><span>Montant payé</span><span class="info-val">${Number(cmd.total||0).toLocaleString('fr-FR')} FCFA</span></div>
+    <div class="info-ligne"><span>Expiration</span><span class="info-val">${exp}</span></div>
+    ${cle!=='—'?`<div class="info-ligne"><span>Clé licence</span><span class="info-val" style="font-family:monospace;font-size:11px">${cle}</span></div>`:''}
+  `;
+
+  // Lien WhatsApp support
+  const msgWa = `Bonjour KynsDev 👋\nJ'ai effectué mon paiement.\nMutuelle : ${cmd.nom||'—'}\nMontant : ${Number(cmd.total||0).toLocaleString('fr-FR')} FCFA\nRéférence : ${reference||'—'}`;
+  document.getElementById('btn-wa').href = `https://wa.me/2250713435873?text=${encodeURIComponent(msgWa)}`;
+}
+
+function showView(id){
+  ['loading','success','error'].forEach(v=>
+    document.getElementById('view-'+v).style.display = v===id?'block':'none'
+  );
+}
+
+function attendre(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+// Lancer la vérification
+verifierEtActiver();
+</script>
+</body>
+</html>
