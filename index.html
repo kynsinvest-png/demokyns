@@ -8434,6 +8434,8 @@ const _TEL_DEFAULT_CODE = '+225';
 const _TEL_DEFAULT_FLAG = 'CI •'; // Pas d'emoji pour éviter les erreurs d'encodage
 
 document.addEventListener('DOMContentLoaded', function(){
+  // Bouton paiement dès le chargement (avant GAS — utilise localStorage)
+  _initBoutonPaiement();
   const flagEl = document.getElementById('tel-flag-display');
   const codeEl = document.getElementById('tel-code-display');
   if(flagEl){ flagEl.textContent = 'CI'; flagEl.style.cssText='font-size:11px;font-weight:700;color:var(--navy);background:#E0F2FE;padding:2px 5px;border-radius:4px'; }
@@ -11113,9 +11115,8 @@ function validateCompte(selectId, labelModule){
 
 // ── BOUTON PAIEMENT LICENCE ─────────────────────────────────────
 function ouvrirPaiement(){
-  const url = branding.urlPaiement || '';
-  if(!url || url.includes('VOTRE_URL')){
-    // Fallback → page paiement KynsDev directe
+  const url = branding.urlPaiement || lsGet('_url_paiement') || '';
+  if(!url || url.includes('VOTRE_URL') || !url.startsWith('http')){
     window.open('https://wa.me/2250713435873?text=Bonjour+KynsDev+je+souhaite+renouveler+ma+licence+pour+'+encodeURIComponent(branding.nom||'mon association'), '_blank');
     return;
   }
@@ -11125,12 +11126,25 @@ function ouvrirPaiement(){
 function _initBoutonPaiement(){
   const wrap = document.getElementById('btn-renouveler-wrap');
   if(!wrap) return;
-  // Afficher le bouton si une URL de paiement est configurée
-  // OU si la licence est expirée / absente
-  const urlOk    = branding.urlPaiement && !branding.urlPaiement.includes('VOTRE_URL');
+
+  // Lire l'URL depuis branding OU depuis le cache localStorage
+  const urlBranding = branding.urlPaiement || '';
+  const urlCache    = lsGet('_url_paiement') || '';
+  const url         = urlBranding || urlCache;
+
+  const urlOk    = url && !url.includes('VOTRE_URL') && url.startsWith('http');
   const licExpire = branding.licenceExpiration &&
     new Date(branding.licenceExpiration) < new Date();
-  if(urlOk || licExpire){
+
+  if(urlOk){
+    // Sauvegarder dans localStorage pour la prochaine fois
+    lsSet('_url_paiement', url);
+    wrap.style.display = 'block';
+  } else if(licExpire){
+    wrap.style.display = 'block';
+  }
+  // Sinon : toujours afficher si une URL est dans le cache
+  else if(urlCache && urlCache.startsWith('http')){
     wrap.style.display = 'block';
   }
 }
