@@ -4253,12 +4253,17 @@ async function loadFromSheets(){
         const mc = typeof branding.modules_config==='string'
           ? JSON.parse(branding.modules_config)
           : branding.modules_config;
-        modulesConfig = {...modulesConfig, ...mc};
+        modulesConfig = mc; // Priorité absolue à Sheets
         lsSet('mc_modules_config', JSON.stringify(modulesConfig));
         applyModulesConfig();
         // Reconstruire la sidebar si l'utilisateur est déjà connecté
         if(currentRole) buildSidebar(currentRole);
       }catch(e){}
+    } else {
+      // Pas de config Sheets → charger depuis localStorage
+      loadModulesConfig();
+      applyModulesConfig();
+      if(currentRole) buildSidebar(currentRole);
     }
     // Sauvegarder dans localStorage (logo inclus — pour les prochains chargements)
     saveBrandingToStorage();
@@ -5190,11 +5195,14 @@ function buildSidebar(role){
     if(id==='page-config-modules'){
       return currentAdmin?.role==='superadmin';
     }
+    // ── PLAFOND CRM KynsDev : bloque TOUT LE MONDE, même superadmin ──
+    if(_crmLockedModules.includes(id)) return false;
+
     // page-dashboard et page-admins : toujours accessibles au superadmin
     if(id==='page-dashboard') return true;
     if(id==='page-admins') return r==='superadmin';
 
-    // Superadmin voit tout (il gère lui-même la config)
+    // Superadmin voit tout le reste (il gère lui-même la config)
     if(r==='superadmin') return true;
 
     // Tous les autres rôles respectent les modules masqués
@@ -5273,6 +5281,11 @@ function appendItem(container, item, indent){
 }
 
 function showPage(id){
+  // ── PLAFOND CRM : bloque même le superadmin ──
+  if(_crmLockedModules.includes(id)){
+    _showDocToast('🔒 Ce module n\'est pas inclus dans votre licence. Contactez KynsDev pour l\'activer.');
+    return;
+  }
   // Vérifier que le module n'est pas masqué par la config (non superadmin uniquement)
   if(currentRole==='admin' && currentAdmin?.role!=='superadmin' && _hiddenAdminModules.includes(id)){
     _showDocToast('⚠️ Ce module est désactivé dans la configuration.');
@@ -11893,12 +11906,36 @@ const CONFIGURABLE_MEMBER_MODULES = [
 let modulesConfig = {};
 let _hiddenAdminModules = [];
 let _hiddenMemberModules = [];
+let _crmLockedModules = []; // Modules bloqués par KynsDev (CRM) — même superadmin ne peut pas y accéder
 
 function loadModulesConfig(){
   try{
-    const saved = lsGet('mc_modules_config');
-    if(saved) modulesConfig = JSON.parse(saved);
-  }catch(e){ modulesConfig={}; }
+    // 1. Lire la config depuis branding (vient de Sheets via GAS)
+    if(branding.modules_config){
+      const mc = typeof branding.modules_config === 'string'
+        ? JSON.parse(branding.modules_config)
+        : branding.modules_config;
+      modulesConfig = mc;
+      lsSet('mc_modules_config', JSON.stringify(modulesConfig));
+    } else {
+      const saved = lsGet('mc_modules_config');
+      if(saved) modulesConfig = JSON.parse(saved);
+    }
+    // 2. Lire le PLAFOND KynsDev (CRM) — bloque même les superadmins
+    _crmLockedModules = [];
+    if(branding.modules_plafond){
+      const plafond = typeof branding.modules_plafond === 'string'
+        ? JSON.parse(branding.modules_plafond)
+        : branding.modules_plafond;
+      Object.entries(plafond).forEach(([pageId, autorise])=>{
+        if(autorise === false) _crmLockedModules.push(pageId);
+      });
+      lsSet('mc_modules_plafond', JSON.stringify(_crmLockedModules));
+    } else {
+      const savedP = lsGet('mc_modules_plafond');
+      if(savedP) _crmLockedModules = JSON.parse(savedP);
+    }
+  }catch(e){ modulesConfig={}; _crmLockedModules=[]; }
 }
 
 function saveConfigModules(){
@@ -11926,12 +11963,37 @@ function saveConfigModules(){
 }
 
 function applyModulesConfig(){
-  _hiddenAdminModules = CONFIGURABLE_ADMIN_MODULES
-    .filter(m=>modulesConfig['admin_'+m.id]===false)
-    .map(m=>m.id);
-  _hiddenMemberModules = CONFIGURABLE_MEMBER_MODULES
-    .filter(m=>modulesConfig['member_'+m.id]===false)
-    .map(m=>m.id);
+  _hiddenAdminModules  = [];
+  _hiddenMemberModules = [];
+
+  CONFIGURABLE_ADMIN_MODULES.forEach(m=>{
+    // Format client : 'admin_page-xxx' = false → masqué
+    const clientKey = 'admin_'+m.id;
+    // Format CRM    : 'page-xxx' = false → masqué
+    const crmKey    = m.id;
+
+    const clientVal = modulesConfig[clientKey];
+    const crmVal    = modulesConfig[crmKey];
+
+    // Masqué si l'un OU l'autre dit false
+    // CRM a priorité si défini, sinon utiliser la config client
+    let visible = true;
+    if(crmVal !== undefined)    visible = crmVal === true;
+    else if(clientVal !== undefined) visible = clientVal !== false;
+
+    if(!visible) _hiddenAdminModules.push(m.id);
+  });
+
+  CONFIGURABLE_MEMBER_MODULES.forEach(m=>{
+    const clientKey = 'member_'+m.id;
+    const crmKey    = m.id;
+    const clientVal = modulesConfig[clientKey];
+    const crmVal    = modulesConfig[crmKey];
+    let visible = true;
+    if(crmVal !== undefined)    visible = crmVal === true;
+    else if(clientVal !== undefined) visible = clientVal !== false;
+    if(!visible) _hiddenMemberModules.push(m.id);
+  });
 }
 
 function renderConfigModules(){
@@ -17142,6 +17204,31 @@ function showReadonlyBanner(){
     </div>
   </div>
 </div>
+
+
+<!-- ══ AGENT IA KYNSDEV (Botpress Webchat) ══════════════════════════════
+     Pour activer : remplacer VOTRE_URL_CONFIG_BOTPRESS par l'URL config
+     de votre bot (Botpress Studio → Webchat → Share → Embed code,
+     c'est la 2ème ligne script, ex: https://files.bpcontent.cloud/.../xx.js)
+════════════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  var BOTPRESS_CONFIG_URL = "https://files.bpcontent.cloud/2026/06/05/21/20260605214306-2EEUUHIQ.js";
+
+  if(!BOTPRESS_CONFIG_URL || BOTPRESS_CONFIG_URL.indexOf('VOTRE_URL') === 0) return;
+
+  var s1 = document.createElement('script');
+  s1.src = 'https://cdn.botpress.cloud/webchat/v3.6/inject.js';
+  s1.async = true;
+  s1.onload = function(){
+    var s2 = document.createElement('script');
+    s2.src = BOTPRESS_CONFIG_URL;
+    s2.defer = true;
+    document.body.appendChild(s2);
+  };
+  document.body.appendChild(s1);
+})();
+</script>
 
 </body>
 </html>
