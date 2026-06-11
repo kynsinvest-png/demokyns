@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KynsDev — Activer ma licence</title>
+<style>
+  :root{
+    --navy:#0F2544;--blue:#1D4ED8;--green:#16A34A;--gold:#F59E0B;
+    --purple:#7C3AED;--red:#DC2626;--gray:#F9FAFB;--border:#E5E7EB;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,sans-serif;background:#F0F4FF;min-height:100vh}
+
+  /* HEADER */
+  .header{background:var(--navy);padding:16px 24px;display:flex;align-items:center;gap:12px}
+  .logo{font-size:22px;font-weight:900;color:#fff;letter-spacing:1px}
+  .logo span{color:var(--gold)}
+  .tagline{font-size:12px;color:rgba(255,255,255,0.6);margin-top:2px}
+
+  /* LAYOUT */
+  .container{max-width:520px;margin:32px auto;padding:0 16px 60px}
+
+  /* CARDS */
+  .card{background:#fff;border-radius:16px;padding:24px;box-shadow:0 2px 16px rgba(0,0,0,0.07);margin-bottom:20px}
+  .card-title{font-size:15px;font-weight:700;color:var(--navy);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+
+  /* OFFRES */
+  .offres{display:flex;flex-direction:column;gap:10px}
+  .offre-card{border:2px solid var(--border);border-radius:12px;padding:14px 16px;cursor:pointer;transition:.15s;position:relative}
+  .offre-card.selected{border-color:var(--blue);background:#EFF6FF}
+  .offre-card input[type=radio]{position:absolute;opacity:0}
+  .offre-top{display:flex;justify-content:space-between;align-items:center}
+  .offre-nom{font-weight:700;font-size:14px;color:var(--navy)}
+  .offre-prix{font-weight:800;font-size:16px;color:var(--blue)}
+  .offre-desc{font-size:12px;color:#6B7280;margin-top:4px}
+  .offre-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#DCFCE7;color:#166534;margin-left:8px}
+  .offre-badge.pop{background:#FEF9C3;color:#92400E}
+
+  /* FORM */
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px}
+  .field input,.field select{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;outline:none;transition:.15s}
+  .field input:focus,.field select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(29,78,216,0.1)}
+  .field .hint{font-size:11px;color:#9CA3AF;margin-top:4px}
+
+  /* RECAP */
+  .recap{background:linear-gradient(135deg,#0F2544,#1E3A5F);border-radius:12px;padding:16px;color:#fff;margin-bottom:16px;display:none}
+  .recap-ligne{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;opacity:.85}
+  .recap-total{display:flex;justify-content:space-between;font-size:17px;font-weight:800;padding-top:10px;margin-top:8px;border-top:1px solid rgba(255,255,255,.2)}
+
+  /* BOUTON PAYER */
+  .btn-payer{width:100%;padding:16px;background:linear-gradient(135deg,#16A34A,#15803D);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:.15s;letter-spacing:.3px}
+  .btn-payer:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(22,163,74,.3)}
+  .btn-payer:disabled{background:#D1D5DB;cursor:not-allowed;transform:none;box-shadow:none}
+
+  /* MOYENS DE PAIEMENT */
+  .moyens{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+  .moyen-badge{padding:4px 10px;background:#F3F4F6;border-radius:20px;font-size:11px;font-weight:600;color:#374151}
+
+  /* LOADER */
+  .loader{display:none;text-align:center;padding:32px}
+  .spinner{width:40px;height:40px;border:4px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ERREUR */
+  .err-box{background:#FEF2F2;border:1.5px solid #FECACA;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--red);display:none;margin-bottom:12px}
+
+  /* SECURE */
+  .secure-note{text-align:center;font-size:11px;color:#9CA3AF;display:flex;align-items:center;justify-content:center;gap:5px;margin-top:12px}
+
+  /* MOIS SELECTOR */
+  .mois-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
+  .mois-btn{border:2px solid var(--border);border-radius:8px;padding:8px 4px;text-align:center;cursor:pointer;font-size:13px;font-weight:700;transition:.15s}
+  .mois-btn.active{border-color:var(--blue);background:#EFF6FF;color:var(--blue)}
+  .mois-btn small{display:block;font-size:10px;font-weight:400;color:#6B7280}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="logo">Kyns<span>Dev</span></div>
+    <div class="tagline">Solutions numériques · Côte d'Ivoire</div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- TITRE -->
+  <div style="text-align:center;margin-bottom:24px">
+    <div style="font-size:24px;font-weight:900;color:var(--navy)">Activez votre licence</div>
+    <div style="font-size:14px;color:#6B7280;margin-top:6px">KynsGestAsso — Gestion de mutuelle & association</div>
+  </div>
+
+  <!-- ETAPE 1 : OFFRE -->
+  <div class="card">
+    <div class="card-title">📦 Choisissez votre offre</div>
+    <div class="offres" id="offres-container">
+      <!-- Généré par JS -->
+    </div>
+  </div>
+
+  <!-- ETAPE 2 : DURÉE -->
+  <div class="card">
+    <div class="card-title">🗓️ Durée de la licence</div>
+    <div class="mois-grid" id="mois-grid">
+      <!-- Généré par JS -->
+    </div>
+  </div>
+
+  <!-- ETAPE 3 : COORDONNÉES -->
+  <div class="card">
+    <div class="card-title">👤 Vos coordonnées</div>
+    <div class="field">
+      <label>Nom de votre mutuelle / association *</label>
+      <input type="text" id="f-nom" placeholder="Ex: MUTUELLE SANTA" oninput="majRecap()"/>
+    </div>
+    <div class="field">
+      <label>Nom du responsable *</label>
+      <input type="text" id="f-contact" placeholder="Ex: KOUAME Jean-Pierre" oninput="majRecap()"/>
+    </div>
+    <div class="field">
+      <label>Numéro WhatsApp *</label>
+      <input type="tel" id="f-tel" placeholder="+225 07 XX XX XX XX" oninput="majRecap()"/>
+      <div class="hint">Votre licence sera envoyée par SMS sur ce numéro</div>
+    </div>
+    <div class="field">
+      <label>Ville</label>
+      <input type="text" id="f-ville" placeholder="Abidjan, Bouaké…"/>
+    </div>
+  </div>
+
+  <!-- RECAP -->
+  <div class="recap" id="recap-box">
+    <div class="recap-ligne"><span>Offre</span><span id="r-offre">—</span></div>
+    <div class="recap-ligne"><span>Durée</span><span id="r-duree">—</span></div>
+    <div class="recap-ligne"><span>Mutuelle</span><span id="r-nom">—</span></div>
+    <div class="recap-total"><span>💰 TOTAL</span><span id="r-total">—</span></div>
+  </div>
+
+  <!-- ERREUR -->
+  <div class="err-box" id="err-box"></div>
+
+  <!-- BOUTON PAYER -->
+  <button class="btn-payer" id="btn-payer" onclick="initierPaiement()" disabled>
+    🔒 Payer et activer ma licence
+  </button>
+
+  <div class="moyens">
+    <span class="moyen-badge">📱 Wave</span>
+    <span class="moyen-badge">🟠 Orange Money</span>
+    <span class="moyen-badge">🟡 MTN MoMo</span>
+    <span class="moyen-badge">🔵 Moov Money</span>
+  </div>
+
+  <div class="secure-note">
+    🔐 Paiement 100% sécurisé par GeniusPay · Vos données sont protégées
+  </div>
+
+  <!-- LOADER -->
+  <div class="loader" id="loader">
+    <div class="spinner"></div>
+    <div style="font-size:14px;color:#6B7280">Redirection vers la page de paiement…</div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+//  CONFIG — À PERSONNALISER
+// ══════════════════════════════════════════════════════════════════
+const CONFIG = {
+  // Votre GAS CRM (reçoit la commande et génère la licence après paiement)
+  GAS_URL: 'VOTRE_URL_GAS_CRM_ICI',
+
+  // Clé publique GeniusPay (pk_live_...)
+  GENIUSPAY_KEY: 'pk_sandbox_O6i405PbFTgXkhpDRdxMadS4iM1Kv2a0',
+
+  // URL de cette page (pour redirection après paiement)
+  SUCCESS_URL: window.location.origin + '/kynsdev_confirmation.html',
+  ERROR_URL:   window.location.href + '?error=1',
+};
+
+// Offres disponibles
+const OFFRES = [
+  {id:'essentiel', nom:'Essentiel',  membres:'10 à 200 membres',  prix:2600,  badge:''},
+  {id:'confort',   nom:'Confort',    membres:'201 à 400 membres', prix:3600,  badge:''},
+  {id:'premium',   nom:'Premium',    membres:'401 à 600 membres', prix:5100,  badge:'⭐ Populaire'},
+  {id:'entreprise',nom:'Entreprise', membres:'+ 600 membres',     prix:null,  badge:'Sur mesure'},
+];
+
+// Durées disponibles (mois)
+const DUREES = [1, 3, 6, 12];
+
+// ══════════════════════════════════════════════════════════════════
+let _offre   = null;
+let _mois    = 3; // défaut 3 mois
+let _total   = 0;
+
+// Rendu des offres
+function renderOffres(){
+  const el = document.getElementById('offres-container');
+  el.innerHTML = OFFRES.map(o=>`
+    <label class="offre-card ${o.id===_offre?.id?'selected':''}" onclick="selectOffre('${o.id}')">
+      <input type="radio" name="offre" value="${o.id}" ${o.id===_offre?.id?'checked':''}/>
+      <div class="offre-top">
+        <div class="offre-nom">${o.nom} ${o.badge?`<span class="offre-badge pop">${o.badge}</span>`:''}</div>
+        <div class="offre-prix">${o.prix ? o.prix.toLocaleString('fr-FR')+' F/mois' : '📞 Nous contacter'}</div>
+      </div>
+      <div class="offre-desc">👥 ${o.membres}</div>
+    </label>`).join('');
+}
+
+// Rendu des durées
+function renderDurees(){
+  const el = document.getElementById('mois-grid');
+  el.innerHTML = DUREES.map(m=>{
+    const prix = _offre ? _offre.prix * m : 0;
+    const remise = m===12?'2 mois offerts':m===6?'1 mois offert':m===3?'Économisez 5%':'';
+    return `<div class="mois-btn ${m===_mois?'active':''}" onclick="selectMois(${m})">
+      ${m} mois
+      ${remise?`<small style="color:var(--green)">${remise}</small>`:''}
+    </div>`;
+  }).join('');
+}
+
+function selectOffre(id){
+  _offre = OFFRES.find(o=>o.id===id);
+  if(!_offre?.prix){ alert('Pour l\'offre Entreprise, contactez-nous : +225 07 13 43 58 73'); return; }
+  renderOffres();
+  renderDurees();
+  majRecap();
+}
+
+function selectMois(m){
+  _mois = m;
+  renderDurees();
+  majRecap();
+}
+
+function majRecap(){
+  const nom     = document.getElementById('f-nom').value.trim();
+  const contact = document.getElementById('f-contact').value.trim();
+  const tel     = document.getElementById('f-tel').value.trim();
+  const errEl   = document.getElementById('err-box');
+  errEl.style.display = 'none';
+
+  if(!_offre?.prix){ document.getElementById('btn-payer').disabled=true; return; }
+
+  // Calcul avec remises selon durée
+  let total = _offre.prix * _mois;
+  if(_mois===12) total = _offre.prix * 10; // 2 mois offerts
+  if(_mois===6)  total = _offre.prix * 5;  // 1 mois offert
+  if(_mois===3)  total = Math.round(_offre.prix * 3 * 0.95); // 5%
+  _total = total;
+
+  // Afficher recap
+  document.getElementById('r-offre').textContent  = _offre.nom+' ('+_offre.membres+')';
+  document.getElementById('r-duree').textContent  = _mois+' mois';
+  document.getElementById('r-nom').textContent    = nom||'—';
+  document.getElementById('r-total').textContent  = total.toLocaleString('fr-FR')+' FCFA';
+  document.getElementById('recap-box').style.display = _offre && nom ? 'block' : 'none';
+
+  // Activer le bouton si tout est rempli
+  const ok = _offre && nom && contact && tel;
+  document.getElementById('btn-payer').disabled = !ok;
+}
+
+async function initierPaiement(){
+  const nom     = document.getElementById('f-nom').value.trim().toUpperCase();
+  const contact = document.getElementById('f-contact').value.trim();
+  const tel     = document.getElementById('f-tel').value.trim();
+  const ville   = document.getElementById('f-ville').value.trim();
+  const errEl   = document.getElementById('err-box');
+
+  if(!nom||!contact||!tel){
+    errEl.textContent='Veuillez remplir tous les champs obligatoires.';
+    errEl.style.display='block'; return;
+  }
+
+  // Calculer date expiration
+  const exp = new Date();
+  exp.setMonth(exp.getMonth() + _mois);
+  const expStr = exp.toISOString().split('T')[0];
+
+  // Afficher loader
+  document.getElementById('loader').style.display='block';
+  document.getElementById('btn-payer').style.display='none';
+
+  // Stocker les infos commande pour la confirmation
+  sessionStorage.setItem('kyns_commande', JSON.stringify({
+    nom, contact, tel, ville,
+    offre:    _offre.nom,
+    mois:     _mois,
+    total:    _total,
+    expiration: expStr,
+  }));
+
+  try{
+    // Appel GeniusPay pour créer le paiement
+    const resp = await fetch('https://pay.genius.ci/api/v1/merchant/payments', {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'X-API-Key':     CONFIG.GENIUSPAY_KEY,
+        // ⚠️ La clé secrète NE DOIT PAS être ici côté client
+        // Elle doit être dans votre GAS (côté serveur)
+        // Ce POST transite par votre GAS proxy
+      },
+      body: JSON.stringify({
+        amount:      _total,
+        currency:    'XOF',
+        description: `Licence KynsGestAsso ${_offre.nom} ${_mois} mois — ${nom}`,
+        customer: {
+          name:  contact,
+          phone: tel,
+        },
+        success_url: CONFIG.SUCCESS_URL,
+        error_url:   CONFIG.ERROR_URL,
+        metadata: {
+          nom_mutuelle: nom,
+          contact,
+          tel,
+          ville,
+          offre:      _offre.id,
+          offre_nom:  _offre.nom,
+          nb_mois:    _mois,
+          expiration: expStr,
+          source:     'kynsdev_auto',
+        }
+      })
+    });
+
+    const data = await resp.json();
+    if(data.success && data.data?.checkout_url){
+      window.location.href = data.data.checkout_url;
+    } else {
+      throw new Error(data.message || 'Erreur GeniusPay');
+    }
+  }catch(e){
+    document.getElementById('loader').style.display='none';
+    document.getElementById('btn-payer').style.display='flex';
+    errEl.textContent = '❌ Erreur : '+e.message+'. Veuillez réessayer ou contacter le +225 07 13 43 58 73';
+    errEl.style.display='block';
+  }
+}
+
+// Init
+renderOffres();
+renderDurees();
+selectOffre('premium'); // Sélectionner Premium par défaut
+
+// Si erreur de paiement renvoyée
+if(window.location.search.includes('error=1')){
+  document.getElementById('err-box').textContent='❌ Le paiement a échoué ou a été annulé. Vous pouvez réessayer.';
+  document.getElementById('err-box').style.display='block';
+}
+</script>
+</body>
+</html>
